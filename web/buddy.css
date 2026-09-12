@@ -712,6 +712,28 @@ body:has(.intro-section) .intro-section {
   }
 }
 
+/* —— Your stats: soft sky background —— */
+.stats-page {
+  min-height: 100vh;
+  background-color: #9ec4e8;
+  background-image: url("../assets/sky-bg.jpg");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center top;
+  background-attachment: fixed;
+}
+
+.stats-page .top-bar,
+.stats-page .subpage-bar {
+  background-color: transparent;
+  background-image: none;
+}
+
+.stats-page .page-inner {
+  position: relative;
+  z-index: 1;
+}
+
 /* —— Personal stats / profile —— */
 .profile-section {
   padding-bottom: 48px;
