@@ -1382,6 +1382,25 @@ body:has(.intro-section) .intro-section {
   margin-top: 12px;
 }
 
+#signed-out-panel[hidden],
+#signed-in-panel[hidden],
+#signed-in-more[hidden] {
+  display: none !important;
+}
+
+#signed-in-panel,
+#signed-in-more {
+  gap: 36px;
+}
+
+#folders-panel {
+  margin: 40px 0 16px;
+}
+
+.sites-settings {
+  margin-top: 40px;
+}
+
 .settings-grid .dash-panel {
   display: flex;
   flex-direction: column;
