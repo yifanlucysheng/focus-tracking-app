@@ -29,23 +29,51 @@ body {
   margin-bottom: 12px;
 }
 
-#start-task-btn {
+.timer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.timer-controls button {
   appearance: none;
   border: none;
   border-radius: 8px;
-  padding: 10px 20px;
+  padding: 10px 16px;
   font-size: 0.95rem;
   font-weight: 600;
+  cursor: pointer;
+}
+
+#start-task-btn {
   color: #fff;
   background: #2f6fed;
-  cursor: pointer;
 }
 
 #start-task-btn:hover:not(:disabled) {
   background: #1f5bd6;
 }
 
-#start-task-btn:disabled {
+#pause-timer-btn {
+  color: #1a1a1a;
+  background: #e8ebf0;
+}
+
+#pause-timer-btn:hover:not(:disabled) {
+  background: #d8dde6;
+}
+
+#cancel-timer-btn {
+  color: #fff;
+  background: #c44b4b;
+}
+
+#cancel-timer-btn:hover:not(:disabled) {
+  background: #a83c3c;
+}
+
+.timer-controls button:disabled {
   opacity: 0.55;
   cursor: default;
 }

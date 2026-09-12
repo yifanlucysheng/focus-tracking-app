@@ -6,9 +6,12 @@ const LOG_POLL_MS = 10_000;
 let remainingSeconds = DEFAULT_SECONDS;
 let countdownId = null;
 let logPollId = null;
+let isPaused = false;
 
 const timerDisplay = document.getElementById("timer-display");
 const startBtn = document.getElementById("start-task-btn");
+const pauseBtn = document.getElementById("pause-timer-btn");
+const cancelBtn = document.getElementById("cancel-timer-btn");
 const characterImg = document.getElementById("character-img");
 const summarySection = document.getElementById("summary-section");
 const summaryText = document.getElementById("summary-text");
@@ -21,6 +24,24 @@ function formatTime(totalSeconds) {
 
 function updateTimerDisplay() {
   timerDisplay.textContent = formatTime(remainingSeconds);
+}
+
+function setControls({ running, paused }) {
+  startBtn.disabled = running || paused;
+  pauseBtn.disabled = !running && !paused;
+  cancelBtn.disabled = !running && !paused;
+  pauseBtn.textContent = paused ? "Resume" : "Pause";
+}
+
+function clearIntervals() {
+  if (countdownId !== null) {
+    clearInterval(countdownId);
+    countdownId = null;
+  }
+  if (logPollId !== null) {
+    clearInterval(logPollId);
+    logPollId = null;
+  }
 }
 
 function getEntryStatus(entry) {
@@ -79,16 +100,9 @@ function showSummary() {
   });
 }
 
-function stopTimer() {
-  if (countdownId !== null) {
-    clearInterval(countdownId);
-    countdownId = null;
-  }
-  if (logPollId !== null) {
-    clearInterval(logPollId);
-    logPollId = null;
-  }
-  startBtn.disabled = false;
+function beginIntervals() {
+  countdownId = setInterval(tick, 1000);
+  logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
 }
 
 function tick() {
@@ -98,23 +112,53 @@ function tick() {
   if (remainingSeconds <= 0) {
     remainingSeconds = 0;
     updateTimerDisplay();
-    stopTimer();
+    clearIntervals();
+    isPaused = false;
+    setControls({ running: false, paused: false });
     showSummary();
   }
 }
 
 function startTimer() {
-  if (countdownId !== null) return;
+  if (countdownId !== null || isPaused) return;
 
   remainingSeconds = DEFAULT_SECONDS;
   updateTimerDisplay();
   summarySection.hidden = true;
-  startBtn.disabled = true;
+  isPaused = false;
+  setControls({ running: true, paused: false });
 
   pollLatestFocusStatus();
-  countdownId = setInterval(tick, 1000);
-  logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
+  beginIntervals();
+}
+
+function pauseOrResumeTimer() {
+  if (!isPaused && countdownId === null) return;
+
+  if (isPaused) {
+    isPaused = false;
+    setControls({ running: true, paused: false });
+    pollLatestFocusStatus();
+    beginIntervals();
+    return;
+  }
+
+  isPaused = true;
+  clearIntervals();
+  setControls({ running: false, paused: true });
+}
+
+function cancelTimer() {
+  clearIntervals();
+  isPaused = false;
+  remainingSeconds = DEFAULT_SECONDS;
+  updateTimerDisplay();
+  summarySection.hidden = true;
+  setControls({ running: false, paused: false });
 }
 
 startBtn?.addEventListener("click", startTimer);
+pauseBtn?.addEventListener("click", pauseOrResumeTimer);
+cancelBtn?.addEventListener("click", cancelTimer);
 updateTimerDisplay();
+setControls({ running: false, paused: false });
