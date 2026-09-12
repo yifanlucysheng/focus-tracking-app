@@ -1,24 +1,45 @@
 # Focus Buddy
 
+> **Demo branch:** use [`local/final-preview`](https://github.com/yifanlucysheng/focus-tracking-app/tree/local/final-preview). That is the current build to try and share.
+
 Chrome extension for focus tracking, with a dashboard, friends, and a lock-in companion.
 
-## Install (anyone)
+## Install from GitHub
 
-You do **not** need Vite or `npm run dev`.
+```bash
+git clone https://github.com/yifanlucysheng/focus-tracking-app.git
+cd focus-tracking-app
+git checkout local/final-preview
+npm install
+npm run build:extension
+```
 
-1. Clone or download this repo from GitHub.
-2. Open Chrome → `chrome://extensions`
-3. Turn on **Developer mode** (top right)
-4. Click **Load unpacked**
-5. Select the `focus-tracking-app` folder (the one that contains `manifest.json`)
+Then in Chrome:
 
-Pin Focus Buddy, click the icon, then **Open dashboard**. Create an account on Settings. Lock-in, folders, stats, and friends all run from that extension.
+1. Open `chrome://extensions`
+2. Turn on **Developer mode**
+3. Click **Load unpacked**
+4. Select the `dist/` folder
 
-After you (or a teammate) change `background.js`, run `npm run build:extension` and click **Reload** on the extension card.
+Pin Focus Buddy, open the popup, then **Open dashboard**. Create an account on Settings.
 
-## Website (Supabase auth)
+After code changes, run `npm run build:extension` again and click **Reload** on the extension card.
 
-The friends/account UI lives in `web/` and uses Vite so Supabase keys stay in env vars.
+### Optional: Gemini
+
+Gemini improves on-task vs distracted classification for unknown sites. It is not required.
+
+To enable it locally, copy `secrets.local.example.js` → `secrets.local.js` and set `GEMINI_API_KEY`. Do not commit `secrets.local.js`.
+
+### Accounts and cloud sync
+
+Accounts use **Firebase** (`web/firebase-config.js` / `secrets.public.js`). Client keys are already in the repo.
+
+For friends, stats sync, and messaging to work for new users, publish [`firestore.rules`](firestore.rules) in Firebase Console → Firestore → Rules, and keep Email auth enabled.
+
+## Website (local Vite / Supabase)
+
+The friends/account UI also lives in `web/` and can be run with Vite.
 
 ### 1. Install
 
@@ -69,6 +90,7 @@ If your project still has a `focus_flame` column, run [`supabase/rename_focus_fl
 `profiles.xp` is **XP toward the next level** (with `focus_level`), not lifetime XP. If your rows still store legacy lifetime XP, run [`supabase/migrate_xp_to_progress.sql`](supabase/migrate_xp_to_progress.sql) once. Session XP rules live in [`web/profile/xp.js`](web/profile/xp.js) (15 XP/min + 25 on complete; `75 + 20L + 5L²` to level up).
 
 To sync session summary cards (longest session, sessions completed, top distraction / productive site, character health), run [`supabase/add_session_summary_stats.sql`](supabase/add_session_summary_stats.sql) once.
+
 ### 4. Run the website
 
 ```bash
@@ -79,13 +101,9 @@ Open the URL Vite prints (usually `http://127.0.0.1:5173`).
 
 After sign-up / sign-in / page reload, the client loads the current user's `profiles` row from Supabase (authoritative for public stats) and keeps it in memory via `getCachedProfile()`.
 
-## Chrome extension auth
+## Session sync notes
 
-Accounts use **Firebase** (`web/firebase-config.js` / `secrets.public.js`), not a separate Vite server.
-
-`npm run build:extension` writes a loadable package to `dist/` (and `focus-buddy-extension.zip`). Load unpacked from the **repo root** or from `dist/`.
-
-Optional Gemini key: copy `secrets.local.example.js` → `secrets.local.js` and paste your key.
+`npm run build:extension` writes a loadable package to `dist/` (and `focus-buddy-extension.zip`).
 
 When a focus timer completes, the extension:
 
