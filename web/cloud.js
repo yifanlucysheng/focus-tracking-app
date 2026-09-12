@@ -66,10 +66,15 @@ export async function signUpWithEmail({ email, password, username }) {
 
   const { doc, getDoc, setDoc, serverTimestamp } = firestoreFns;
   const nameRef = doc(db, "usernames", key);
-  const existing = await getDoc(nameRef);
-  if (existing.exists()) throw new Error("That username is taken.");
+  try {
+    const existing = await getDoc(nameRef);
+    if (existing.exists()) throw new Error("That username is taken.");
+  } catch (error) {
+    if (error?.message && /taken/i.test(error.message)) throw error;
+    // Username lookup can fail before sign-in if rules are still locked; continue and let create fail clearly.
+  }
 
-  const cred = await authFns.createUserWithEmailAndPassword(auth, email, password);
+  const cred = await authFns.createUserWithEmailAndPassword(auth, String(email || "").trim(), password);
   const uid = cred.user.uid;
   await setDoc(doc(db, "users", uid), {
     username: key,

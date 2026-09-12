@@ -72,8 +72,14 @@ document.getElementById("signup-btn")?.addEventListener("click", async () => {
       password: document.getElementById("signup-password")?.value,
     });
     setBanner("Account created.");
+    await renderAccount();
   } catch (error) {
-    setBanner(error.message || "Could not create account.");
+    const raw = error.message || "Could not create account.";
+    setBanner(
+      /permission|insufficient/i.test(raw)
+        ? "Firebase Auth worked or almost did, but Firestore rules are blocking the profile write. In Firebase Console open Firestore → Rules, paste firestore.rules from this project, and click Publish."
+        : raw
+    );
   }
 });
 

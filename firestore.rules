@@ -28,11 +28,10 @@ service cloud.firestore {
     }
 
     match /usernames/{name} {
-      allow read: if signedIn();
-      allow create: if isOwner(request.resource.data.uid)
-        && !exists(/databases/$(database)/documents/usernames/$(name))
-        && request.resource.data.username is string
-        && request.resource.data.username.lower() == name;
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == name;
       allow delete: if isOwner(resource.data.uid);
       allow update: if false;
     }
