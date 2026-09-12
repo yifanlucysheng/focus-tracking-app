@@ -20896,7 +20896,9 @@ ${suffix}`;
     return getAuthState();
   }
   async function fetchOwnProfile(userId) {
-    const { data, error } = await getSupabase().from("profiles").select("id, username, focus_level, xp, focus_streak").eq("id", userId).maybeSingle();
+    const { data, error } = await getSupabase().from("profiles").select(
+      "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health"
+    ).eq("id", userId).maybeSingle();
     if (error) throw error;
     return data;
   }
@@ -21175,6 +21177,26 @@ ${suffix}`;
     };
   }
 
+  // web/profile/sessionSummary.js
+  function publicSessionSummaryFromStats(stats) {
+    return {
+      longest_session_ms: Math.max(
+        0,
+        Math.floor(Number(stats.longestSessionMs) || 0)
+      ),
+      sessions_completed: Math.max(
+        0,
+        Math.floor(Number(stats.sessionsCompleted) || 0)
+      ),
+      top_distraction: stats.topDistraction ? String(stats.topDistraction) : null,
+      top_productive_site: stats.topProductiveSite ? String(stats.topProductiveSite) : null,
+      character_health: Math.max(
+        0,
+        Math.min(100, Math.floor(Number(stats.characterHealth) || 0))
+      )
+    };
+  }
+
   // chrome-auth/chromeProfileStorage.js
   var PROFILE_STORAGE_KEY = "focusBuddy.profileStats";
   var PENDING_SYNC_KEY = "focusBuddy.pendingPublicSync";
@@ -21260,14 +21282,22 @@ ${suffix}`;
   }
 
   // chrome-auth/sessionStatsService.js
+  var PROFILE_SELECT = "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health, created_at";
   async function syncProfileStats(userId, stats, sessionId) {
     const focus_level = Math.max(1, Math.floor(Number(stats.focus_level) || 1));
     const xp = Math.max(0, Math.floor(Number(stats.xp) || 0));
     const focus_streak = Math.max(0, Math.floor(Number(stats.focus_streak) || 0));
-    const payload = { focus_level, xp, focus_streak };
+    const summary = publicSessionSummaryFromStats({
+      longestSessionMs: stats.longest_session_ms ?? stats.longestSessionMs,
+      sessionsCompleted: stats.sessions_completed ?? stats.sessionsCompleted,
+      topDistraction: stats.top_distraction ?? stats.topDistraction,
+      topProductiveSite: stats.top_productive_site ?? stats.topProductiveSite,
+      characterHealth: stats.character_health ?? stats.characterHealth
+    });
+    const payload = { focus_level, xp, focus_streak, ...summary };
     try {
       const supabase = getSupabase();
-      const { data, error } = await supabase.from("profiles").update(payload).eq("id", userId).select("id, username, focus_level, xp, focus_streak, created_at").maybeSingle();
+      const { data, error } = await supabase.from("profiles").update(payload).eq("id", userId).select(PROFILE_SELECT).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("No profiles row returned for sync.");
       await clearPendingSyncForUser(userId);
@@ -21323,17 +21353,21 @@ ${suffix}`;
       xpModel: store.xpModel
     });
     const after = applyXp(before.level, before.xp, earnedXp);
-    store.sessions = [
-      ...store.sessions,
-      {
-        id: sessionId,
-        startedAt: sessionInput.startedAt,
-        endedAt,
-        durationMs,
-        completed: true,
-        onTaskRatio
-      }
-    ];
+    const session = {
+      id: sessionId,
+      startedAt: sessionInput.startedAt,
+      endedAt,
+      durationMs,
+      completed: true,
+      onTaskRatio
+    };
+    if (sessionInput.distractionDomains) {
+      session.distractionDomains = sessionInput.distractionDomains;
+    }
+    if (sessionInput.productiveDomains) {
+      session.productiveDomains = sessionInput.productiveDomains;
+    }
+    store.sessions = [...store.sessions, session];
     store.level = after.level;
     store.xp = after.xp;
     store.xpModel = "progress";
@@ -21355,10 +21389,18 @@ ${suffix}`;
     for (const item of queue) {
       try {
         const supabase = getSupabase();
+        const summary = publicSessionSummaryFromStats({
+          longestSessionMs: item.longest_session_ms,
+          sessionsCompleted: item.sessions_completed,
+          topDistraction: item.top_distraction,
+          topProductiveSite: item.top_productive_site,
+          characterHealth: item.character_health
+        });
         const { error } = await supabase.from("profiles").update({
           focus_level: item.focus_level,
           xp: item.xp,
-          focus_streak: item.focus_streak ?? item.focus_flame
+          focus_streak: item.focus_streak ?? item.focus_flame,
+          ...summary
         }).eq("id", item.userId);
         if (error) throw error;
       } catch (err) {
@@ -21374,7 +21416,9 @@ ${suffix}`;
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user?.id;
       if (!userId) return;
-      const { data, error } = await supabase.from("profiles").select("xp, focus_level, focus_streak").eq("id", userId).maybeSingle();
+      const { data, error } = await supabase.from("profiles").select(
+        "xp, focus_level, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health"
+      ).eq("id", userId).maybeSingle();
       if (error) throw error;
       if (!data) return;
       const remote = normalizeProgressXp(data.focus_level, data.xp, {});
@@ -21389,12 +21433,30 @@ ${suffix}`;
         store.focusStreak || 0,
         Math.floor(Number(data.focus_streak) || 0)
       );
+      store.summary = {
+        longestSessionMs: Math.max(
+          0,
+          Math.floor(Number(data.longest_session_ms) || 0)
+        ),
+        sessionsCompleted: Math.max(
+          0,
+          Math.floor(Number(data.sessions_completed) || 0)
+        ),
+        topDistraction: data.top_distraction || null,
+        topProductiveSite: data.top_productive_site || null,
+        characterHealth: Math.max(
+          0,
+          Math.min(100, Math.floor(Number(data.character_health) || 0))
+        )
+      };
       if (remote.migrated && (remote.level !== data.focus_level || remote.xp !== data.xp)) {
         const toSync = isProgressAhead(local, remote) ? local : remote;
+        const stats = calculateProfileStats(store);
         await syncProfileStats(userId, {
           focus_level: toSync.level,
           xp: toSync.xp,
-          focus_streak: store.focusStreak
+          focus_streak: store.focusStreak,
+          ...publicSessionSummaryFromStats(stats)
         });
       }
     } catch (err) {
@@ -21420,7 +21482,8 @@ ${suffix}`;
         {
           focus_level: stats.level,
           xp: stats.xp,
-          focus_streak: stats.focusStreakDays
+          focus_streak: stats.focusStreakDays,
+          ...publicSessionSummaryFromStats(stats)
         },
         sessionId
       );

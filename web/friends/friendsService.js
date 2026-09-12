@@ -34,7 +34,8 @@ import { getSupabaseConfigStatus, supabase } from "../auth/supabaseClient.js";
  * @property {ProfileRow} addressee
  */
 
-const PROFILE_COLUMNS = "id, username, focus_level, xp, focus_streak, created_at";
+const PROFILE_COLUMNS =
+  "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health, created_at";
 const FRIENDSHIP_COLUMNS = "id, requester_id, addressee_id, status, created_at";
 
 /**

@@ -127,6 +127,11 @@ export async function markSessionProcessed(sessionId) {
  * @property {number} focus_level
  * @property {number} [focus_streak]
  * @property {number} [focus_flame]
+ * @property {number} [longest_session_ms]
+ * @property {number} [sessions_completed]
+ * @property {string|null} [top_distraction]
+ * @property {string|null} [top_productive_site]
+ * @property {number} [character_health]
  * @property {string} [sessionId]
  * @property {number} updatedAt
  */

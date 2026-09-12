@@ -8,6 +8,8 @@ import {
   applyXp,
   calculateProfileStats,
   calculateSessionXp,
+  characterHealthLabel,
+  formatDurationShort,
   normalizeProgressXp,
 } from "./calculateStats.js";
 import {
@@ -16,6 +18,7 @@ import {
   updateFocusStreakOnSessionComplete,
 } from "./focusStreak.js";
 import { loadProfileStore, saveProfileStore } from "./profileStorage.js";
+import { publicSessionSummaryFromStats } from "./sessionSummary.js";
 
 /**
  * @typedef {import('../auth/authService.js').ProfileRow} ProfileRow
@@ -24,17 +27,21 @@ import { loadProfileStore, saveProfileStore } from "./profileStorage.js";
  */
 
 /**
- * Public leaderboard fields only — never sync browsing history, tasks, or session details.
+ * Public profile fields synced to Supabase (no full browsing history / task text).
  *
  * @typedef {Object} PublicProfileStats
  * @property {number} focus_level
  * @property {number} xp - XP toward next level
  * @property {number} focus_streak
+ * @property {number} [longest_session_ms]
+ * @property {number} [sessions_completed]
+ * @property {string|null} [top_distraction]
+ * @property {string|null} [top_productive_site]
+ * @property {number} [character_health]
  */
 
 /**
  * Merge Supabase-authoritative public fields onto a local stats view.
- * Private session-derived fields (longest session, distractions, etc.) stay local.
  *
  * @param {ProfileStatsView} localStats
  * @param {ProfileRow|null|undefined} publicProfile
@@ -51,14 +58,60 @@ export function mergePublicProfileIntoStats(localStats, publicProfile) {
     )
   );
 
+  const remoteSessions = Math.max(
+    0,
+    Math.floor(Number(publicProfile.sessions_completed) || 0)
+  );
+  const remoteLongest = Math.max(
+    0,
+    Math.floor(Number(publicProfile.longest_session_ms) || 0)
+  );
+  const sessionsCompleted = Math.max(
+    localStats.sessionsCompleted || 0,
+    remoteSessions
+  );
+  const longestSessionMs = Math.max(
+    localStats.longestSessionMs || 0,
+    remoteLongest
+  );
+  const preferRemoteSummary = remoteSessions >= (localStats.sessionsCompleted || 0);
+  const topDistraction = preferRemoteSummary
+    ? publicProfile.top_distraction ?? localStats.topDistraction
+    : localStats.topDistraction ?? publicProfile.top_distraction ?? null;
+  const topProductiveSite = preferRemoteSummary
+    ? publicProfile.top_productive_site ?? localStats.topProductiveSite
+    : localStats.topProductiveSite ?? publicProfile.top_productive_site ?? null;
+  const characterHealth = preferRemoteSummary
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.floor(
+            Number(publicProfile.character_health ?? localStats.characterHealth) ||
+              0
+          )
+        )
+      )
+    : localStats.characterHealth;
+
+  const hasSessions = Boolean(localStats.hasSessions || sessionsCompleted > 0);
+
   return {
     ...localStats,
+    hasSessions,
     level: use.level,
     xp: use.xp,
     focusStreakDays: focus_streak,
     xpIntoLevel: use.xp,
     xpForNextLevel: use.xpForNextLevel,
     xpProgress: use.xpForNextLevel === 0 ? 0 : use.xp / use.xpForNextLevel,
+    longestSessionMs,
+    longestSessionLabel: formatDurationShort(longestSessionMs),
+    sessionsCompleted,
+    topDistraction: topDistraction || null,
+    topProductiveSite: topProductiveSite || null,
+    characterHealth,
+    characterHealthLabel: characterHealthLabel(characterHealth),
     lastCompletedFocusDate: localStats.lastCompletedFocusDate ?? null,
   };
 }
@@ -153,13 +206,28 @@ export async function syncProfileStats(userId, stats) {
         0
     )
   );
+  const summary = publicSessionSummaryFromStats({
+    longestSessionMs: stats.longest_session_ms ?? stats.longestSessionMs,
+    sessionsCompleted: stats.sessions_completed ?? stats.sessionsCompleted,
+    topDistraction: stats.top_distraction ?? stats.topDistraction,
+    topProductiveSite: stats.top_productive_site ?? stats.topProductiveSite,
+    characterHealth: stats.character_health ?? stats.characterHealth,
+  });
+  const payload = {
+    focus_level,
+    xp,
+    focus_streak,
+    ...summary,
+  };
 
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .update({ focus_level, xp, focus_streak })
+      .update(payload)
       .eq("id", userId)
-      .select("id, username, focus_level, xp, focus_streak, created_at")
+      .select(
+        "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health, created_at"
+      )
       .maybeSingle();
 
     if (error) throw error;
@@ -205,6 +273,7 @@ export async function syncPublicStatsFromLocalStore() {
     focus_level: stats.level,
     xp: stats.xp,
     focus_streak: stats.focusStreakDays,
+    ...publicSessionSummaryFromStats(stats),
   });
 
   return { stats, profile };
@@ -286,6 +355,7 @@ export async function recordCompletedSession(sessionInput) {
         focus_level: stats.level,
         xp: stats.xp,
         focus_streak: stats.focusStreakDays,
+        ...publicSessionSummaryFromStats(stats),
       })
     : null;
 

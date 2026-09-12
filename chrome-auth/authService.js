@@ -112,7 +112,9 @@ export async function signOut() {
 async function fetchOwnProfile(userId) {
   const { data, error } = await getSupabase()
     .from("profiles")
-    .select("id, username, focus_level, xp, focus_streak")
+    .select(
+      "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health"
+    )
     .eq("id", userId)
     .maybeSingle();
 

@@ -4,9 +4,26 @@
 
   const HOST_ID = "focus-buddy-overlay-host";
 
+  function hasRuntime() {
+    return typeof chrome !== "undefined" && !!chrome.runtime?.getURL;
+  }
+
+  function hasStorage() {
+    return (
+      typeof chrome !== "undefined" &&
+      !!chrome.storage?.local &&
+      typeof chrome.storage.onChanged?.addListener === "function"
+    );
+  }
+
   function bunnyUrl(mood) {
     const file = mood === "distracted" ? "angrybunny.png" : "sleepbunny.png";
-    return chrome.runtime.getURL(file);
+    if (!hasRuntime()) return file;
+    try {
+      return chrome.runtime.getURL(file);
+    } catch {
+      return file;
+    }
   }
 
   function getImg() {
@@ -71,12 +88,26 @@
     return host;
   }
 
-  function showOverlay(animate) {
+  function setMood(mood) {
+    const img = getImg();
+    if (img) img.src = bunnyUrl(mood);
+  }
+
+  function showOverlay(animate, mood) {
     const host = ensureHost();
     const img = host.shadowRoot.querySelector("img");
-    chrome.storage.local.get("characterMood").then((result) => {
-      img.src = bunnyUrl(result.characterMood);
-    });
+
+    if (mood) {
+      img.src = bunnyUrl(mood);
+    } else if (hasStorage()) {
+      chrome.storage.local.get("characterMood").then((result) => {
+        img.src = bunnyUrl(result.characterMood);
+      }).catch(() => {
+        img.src = bunnyUrl("on-task");
+      });
+    } else {
+      img.src = bunnyUrl("on-task");
+    }
 
     img.classList.remove("fall", "rest");
     if (animate) {
@@ -99,20 +130,32 @@
     document.getElementById(HOST_ID)?.remove();
   }
 
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local") return;
-    if (changes.lockInActive && changes.lockInActive.newValue === false) {
-      hideOverlay();
+  if (hasStorage()) {
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== "local") return;
+        if (changes.lockInActive && changes.lockInActive.newValue === false) {
+          hideOverlay();
+        }
+        if (changes.characterMood) {
+          setMood(changes.characterMood.newValue);
+        }
+      });
+    } catch {
+      // Extension context may be invalidated after reload; messages still work.
     }
-    if (changes.characterMood) {
-      const img = getImg();
-      if (img) img.src = bunnyUrl(changes.characterMood.newValue);
-    }
-  });
+  }
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type === "OVERLAY_FALL") showOverlay(true);
-    if (message?.type === "OVERLAY_SHOW") showOverlay(false);
-    if (message?.type === "OVERLAY_HIDE") hideOverlay();
-  });
+  if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message?.type === "OVERLAY_FALL") {
+        showOverlay(true, message.mood);
+      }
+      if (message?.type === "OVERLAY_SHOW") {
+        showOverlay(false, message.mood);
+      }
+      if (message?.type === "OVERLAY_HIDE") hideOverlay();
+      if (message?.type === "OVERLAY_MOOD") setMood(message.mood);
+    });
+  }
 })();

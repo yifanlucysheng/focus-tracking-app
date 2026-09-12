@@ -198,6 +198,10 @@ async function recordFocusSessionFromTimer(timerState) {
     timerState.startedAt,
     timerState.endedAt
   );
+  const domainMaps = await buildDomainMapsForSession(
+    timerState.startedAt,
+    timerState.endedAt
+  );
 
   try {
     const result = await globalThis.FocusBuddyAuth.recordCompletedSession({
@@ -206,6 +210,8 @@ async function recordFocusSessionFromTimer(timerState) {
       endedAt: timerState.endedAt,
       durationMs,
       onTaskRatio,
+      distractionDomains: domainMaps.distractionDomains,
+      productiveDomains: domainMaps.productiveDomains,
     });
     if (result?.skippedDuplicate) {
       console.info(
@@ -245,6 +251,47 @@ async function estimateOnTaskRatio(startedAt, endedAt) {
     return onTask / slice.length;
   } catch {
     return 1;
+  }
+}
+
+/**
+ * Aggregate per-domain counts from the focus log for one session window.
+ * @param {number} startedAt
+ * @param {number} endedAt
+ */
+async function buildDomainMapsForSession(startedAt, endedAt) {
+  try {
+    const result = await chrome.storage.local.get(FOCUS_LOG_KEY);
+    const focusLog = Array.isArray(result[FOCUS_LOG_KEY])
+      ? result[FOCUS_LOG_KEY]
+      : [];
+    /** @type {Record<string, number>} */
+    const distractionDomains = {};
+    /** @type {Record<string, number>} */
+    const productiveDomains = {};
+    for (const entry of focusLog) {
+      if (!entry || typeof entry.timestamp !== "number") continue;
+      if (entry.timestamp < startedAt || entry.timestamp > endedAt) continue;
+      let domain = typeof entry.domain === "string" ? entry.domain : null;
+      if (!domain && entry.url) {
+        try {
+          domain = new URL(entry.url).hostname
+            .toLowerCase()
+            .replace(/^www\./, "");
+        } catch {
+          domain = null;
+        }
+      }
+      if (!domain) continue;
+      if (entry.status === "distracted") {
+        distractionDomains[domain] = (distractionDomains[domain] || 0) + 1;
+      } else if (entry.status === "on-task") {
+        productiveDomains[domain] = (productiveDomains[domain] || 0) + 1;
+      }
+    }
+    return { distractionDomains, productiveDomains };
+  } catch {
+    return { distractionDomains: {}, productiveDomains: {} };
   }
 }
 
@@ -370,17 +417,49 @@ async function saveKeywords(keywords) {
   await chrome.storage.local.set({ [KEYWORDS_KEY]: keywords });
 }
 
-async function appendFocusLog(status) {
+async function appendFocusLog(status, tab) {
   const result = await chrome.storage.local.get(FOCUS_LOG_KEY);
   const focusLog = Array.isArray(result[FOCUS_LOG_KEY])
     ? result[FOCUS_LOG_KEY]
     : [];
-  focusLog.push({ status, timestamp: Date.now() });
+  let domain = null;
+  try {
+    const rawUrl = tab?.url || "";
+    if (rawUrl) {
+      domain = new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, "");
+    }
+  } catch {
+    domain = null;
+  }
+  focusLog.push({
+    status,
+    timestamp: Date.now(),
+    domain,
+    url: tab?.url || null,
+  });
   await chrome.storage.local.set({ [FOCUS_LOG_KEY]: focusLog });
 }
 
 async function setCharacterMood(status) {
   await chrome.storage.local.set({ [MOOD_KEY]: status });
+  await broadcastOverlayMood(status);
+}
+
+async function broadcastOverlayMood(mood) {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (tab.id == null) return;
+      try {
+        await chrome.tabs.sendMessage(tab.id, {
+          type: "OVERLAY_MOOD",
+          mood,
+        });
+      } catch {
+        // Tab has no overlay listener.
+      }
+    })
+  );
 }
 
 function clearDistractedTimer() {
@@ -390,8 +469,8 @@ function clearDistractedTimer() {
   }
 }
 
-async function applyTabStatus(status) {
-  await appendFocusLog(status);
+async function applyTabStatus(status, tab) {
+  await appendFocusLog(status, tab);
 
   if (status === "on-task") {
     clearDistractedTimer();
@@ -539,21 +618,26 @@ async function classifyActiveTab() {
 }
 
 async function evaluateActiveTab() {
-  const status = await classifyActiveTab();
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tab = tabs[0];
+  const status = await classifyTab(tab);
   if (status) {
-    await applyTabStatus(status);
+    await applyTabStatus(status, tab);
   }
 }
 
 async function injectOverlay(tabId, animate) {
   if (tabId == null) return;
   try {
+    const moodResult = await chrome.storage.local.get(MOOD_KEY);
+    const mood = moodResult[MOOD_KEY] || "on-task";
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["overlay.js"],
     });
     await chrome.tabs.sendMessage(tabId, {
       type: animate ? "OVERLAY_FALL" : "OVERLAY_SHOW",
+      mood,
     });
   } catch {
     // Cannot inject into chrome://, the Web Store, or discarded tabs.
@@ -746,6 +830,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!tab.active) return;
   const status = await classifyTab(tab);
   if (status) {
-    await applyTabStatus(status);
+    await applyTabStatus(status, tab);
   }
 });

@@ -7,10 +7,16 @@ import { getSupabaseConfigStatus, supabase } from "./supabaseClient.js";
  * @property {number} focus_level
  * @property {number} xp
  * @property {number} focus_streak
+ * @property {number} [longest_session_ms]
+ * @property {number} [sessions_completed]
+ * @property {string|null} [top_distraction]
+ * @property {string|null} [top_productive_site]
+ * @property {number} [character_health]
  * @property {string} created_at
  */
 
-const PROFILE_COLUMNS = "id, username, focus_level, xp, focus_streak, created_at";
+const PROFILE_COLUMNS =
+  "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health, created_at";
 
 /** @type {ProfileRow|null} */
 let cachedProfile = null;

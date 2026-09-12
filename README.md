@@ -54,6 +54,7 @@ If your project still has a `focus_flame` column, run [`supabase/rename_focus_fl
 
 `profiles.xp` is **XP toward the next level** (with `focus_level`), not lifetime XP. If your rows still store legacy lifetime XP, run [`supabase/migrate_xp_to_progress.sql`](supabase/migrate_xp_to_progress.sql) once. Session XP rules live in [`web/profile/xp.js`](web/profile/xp.js) (15 XP/min + 25 on complete; `75 + 20L + 5L²` to level up).
 
+To sync session summary cards (longest session, sessions completed, top distraction / productive site, character health), run [`supabase/add_session_summary_stats.sql`](supabase/add_session_summary_stats.sql) once.
 ### 4. Run the website
 
 ```bash

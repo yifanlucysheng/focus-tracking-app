@@ -7,6 +7,11 @@ create table if not exists public.profiles (
   focus_level integer not null default 1,
   xp integer not null default 0,
   focus_streak integer not null default 0,
+  longest_session_ms integer not null default 0,
+  sessions_completed integer not null default 0,
+  top_distraction text,
+  top_productive_site text,
+  character_health integer not null default 0,
   created_at timestamptz not null default now(),
   constraint profiles_username_length check (char_length(username) between 3 and 24),
   constraint profiles_username_format check (username ~ '^[a-z0-9_]+$')
