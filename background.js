@@ -16,6 +16,12 @@ let distractedTimerId = null;
 let geminiCache = new Map();
 let geminiInflight = new Map();
 
+try {
+  importScripts("secrets.local.js");
+} catch {
+  // Optional developer key file; matching still uses storage or keywords.
+}
+
 function defaultTimerState() {
   return {
     durationSeconds: DEFAULT_SECONDS,
@@ -240,9 +246,15 @@ function parseGeminiRelated(payload) {
   return null;
 }
 
-async function askGeminiIfRelated(task, details) {
+async function getGeminiApiKey() {
+  const bundled = String(globalThis.GEMINI_API_KEY || "").trim();
+  if (bundled) return bundled;
   const stored = await chrome.storage.local.get(GEMINI_KEY);
-  const apiKey = String(stored[GEMINI_KEY] || "").trim();
+  return String(stored[GEMINI_KEY] || "").trim();
+}
+
+async function askGeminiIfRelated(task, details) {
+  const apiKey = await getGeminiApiKey();
   if (!apiKey || !task) return null;
 
   const cacheKey = `${task.toLowerCase()}||${details.url}`;
