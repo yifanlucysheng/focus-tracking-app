@@ -1,13 +1,25 @@
+function publicBuddySrc(fileName) {
+  const name = String(fileName || "").replace(/^\//, "");
+  try {
+    if (globalThis.chrome?.runtime?.getURL) {
+      return chrome.runtime.getURL(name);
+    }
+  } catch {
+    // Website / Vite uses files from the public assets folder.
+  }
+  return `/${name}`;
+}
+
 export const CHARACTERS = {
   cat: {
-    src: "/cat.png",
+    src: publicBuddySrc("cat.png"),
     alt: "Cat buddy",
     name: "Cat Buddy",
     blurb:
       "Your ordinary house cat. Cat Buddy treats every assignment like a sunbeam: sit still, stay close, and will be very VERY upset if you wander off to a distracting tab.",
   },
   sleepbunny: {
-    src: "/moon1.png",
+    src: publicBuddySrc("moon1.png"),
     alt: "Moon buddy",
     name: "Moon Buddy",
     blurb:
@@ -25,4 +37,17 @@ export function loadSelectedCharacterId() {
     // Keep default.
   }
   return "sleepbunny";
+}
+
+export async function loadSelectedCharacterIdAsync() {
+  try {
+    if (globalThis.chrome?.storage?.local?.get) {
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      const id = result[STORAGE_KEY];
+      if (id && CHARACTERS[id]) return id;
+    }
+  } catch {
+    // Fall through to localStorage.
+  }
+  return loadSelectedCharacterId();
 }

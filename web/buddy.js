@@ -1,4 +1,8 @@
-import { CHARACTERS, STORAGE_KEY, loadSelectedCharacterId } from "./characters.js";
+import {
+  CHARACTERS,
+  STORAGE_KEY,
+  loadSelectedCharacterIdAsync,
+} from "./characters.js";
 import { mountSiteNav } from "./layout.js";
 import { isCloudConfigured, updateUserDoc } from "./cloud.js";
 
@@ -7,7 +11,35 @@ const bioName = document.getElementById("buddy-bio-name");
 const bioBlurb = document.getElementById("buddy-bio-blurb");
 const options = Array.from(document.querySelectorAll(".buddy-option"));
 
-let selectedCharacterId = loadSelectedCharacterId();
+let selectedCharacterId = "sleepbunny";
+
+function pushCharacterToExtension(id) {
+  try {
+    if (globalThis.chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage(
+        { type: "SET_SELECTED_CHARACTER", characterId: id },
+        () => {
+          void chrome.runtime.lastError;
+        }
+      );
+      return;
+    }
+  } catch {
+    // Fall through to page-bridge postMessage.
+  }
+  try {
+    window.postMessage(
+      {
+        source: "focus-buddy-website",
+        type: "SET_SELECTED_CHARACTER",
+        characterId: id,
+      },
+      "*"
+    );
+  } catch {
+    // Ignore if messaging is blocked.
+  }
+}
 
 function applyCharacter(id) {
   const character = CHARACTERS[id];
@@ -29,6 +61,9 @@ function applyCharacter(id) {
     const selected = button.dataset.character === id;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-selected", selected ? "true" : "false");
+    const img = button.querySelector("img");
+    const optionCharacter = CHARACTERS[button.dataset.character];
+    if (img && optionCharacter) img.src = optionCharacter.src;
   });
 
   try {
@@ -37,18 +72,7 @@ function applyCharacter(id) {
     // Ignore storage errors in private browsing contexts.
   }
 
-  try {
-    window.postMessage(
-      {
-        source: "focus-buddy-website",
-        type: "SET_SELECTED_CHARACTER",
-        characterId: id,
-      },
-      "*"
-    );
-  } catch {
-    // Ignore if messaging is blocked.
-  }
+  pushCharacterToExtension(id);
 
   if (isCloudConfigured()) {
     void updateUserDoc({ characterId: id }).catch(() => {});
@@ -62,4 +86,5 @@ options.forEach((button) => {
 });
 
 mountSiteNav("home");
+selectedCharacterId = await loadSelectedCharacterIdAsync();
 applyCharacter(selectedCharacterId);
