@@ -31548,12 +31548,19 @@ This typically indicates that your device does not have a healthy Internet conne
     }
   }
   async function syncLiveCharacterHealth(health, options = {}) {
-    await waitForSignedInUser(5e3);
     let auth2;
     try {
       auth2 = getFirebaseAuth();
     } catch {
       return null;
+    }
+    if (!auth2?.currentUser?.uid) {
+      await waitForSignedInUser(400);
+      try {
+        auth2 = getFirebaseAuth();
+      } catch {
+        return null;
+      }
     }
     const userId = auth2?.currentUser?.uid;
     if (!userId) return null;

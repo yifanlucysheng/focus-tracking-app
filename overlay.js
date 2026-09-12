@@ -1,6 +1,6 @@
 (() => {
   // Bump so re-inject replaces older overlay copies that crashed on chrome.storage.
-  const OVERLAY_VERSION = 8;
+  const OVERLAY_VERSION = 10;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
@@ -19,28 +19,22 @@
   }
 
   /**
-   * Cat Buddy health stages (7 levels). Matches web/profile/characterHealthVisual.js
-   * 95/80/65/50/35/20/0 → cat.png … cat7.png
+   * Cat Buddy health bands. Matches web/profile/characterHealthVisual.js
    * @param {number} health
    * @returns {string} extension-packaged filename
    */
   function catFileForHealth(health) {
-    const values = [95, 80, 65, 50, 35, 20, 0];
     const parsed = Number(health);
     const h = Number.isFinite(parsed)
       ? Math.max(0, Math.min(100, parsed))
       : 95;
-    let best = 0;
-    let bestDist = Math.abs(values[0] - h);
-    for (let i = 1; i < values.length; i += 1) {
-      const dist = Math.abs(values[i] - h);
-      if (dist < bestDist) {
-        best = i;
-        bestDist = dist;
-      }
-    }
-    if (best <= 0) return "cat.png";
-    return `cat${best + 1}.png`;
+    if (h >= 95) return "cat.png";
+    if (h >= 80) return "cat2.png";
+    if (h >= 65) return "cat3.png";
+    if (h >= 50) return "cat4.png";
+    if (h >= 35) return "cat5.png";
+    if (h >= 20) return "cat6.png";
+    return "cat7.png";
   }
 
   function bunnyFileForMood(mood) {
@@ -123,19 +117,14 @@
     return host;
   }
 
-  function applyBuddyVisual(payload) {
-    const img = getImg();
-    if (!img) return;
-    const file = resolveBuddyFile(payload);
-    img.src = extensionUrl(file);
-
+  function notifyPageHealth(payload) {
     const health = Number(payload?.characterHealth);
     const live = Boolean(payload?.liveSessionActive);
-    const safeHealth = Number.isFinite(health)
-      ? live && health <= 0
-        ? 95
-        : health
-      : 95;
+    const safeHealth = Number.isFinite(health) ? health : 95;
+    const file =
+      typeof payload?.buddyFile === "string"
+        ? payload.buddyFile
+        : resolveBuddyFile(payload);
     try {
       window.postMessage(
         {
@@ -152,6 +141,16 @@
     } catch {
       // Page may be restricted.
     }
+  }
+
+  function applyBuddyVisual(payload) {
+    const img = getImg();
+    if (img) {
+      const file = resolveBuddyFile(payload);
+      img.src = extensionUrl(file);
+    }
+    // Always notify the page — health sync must not depend on the overlay host.
+    notifyPageHealth(payload);
   }
 
   function showOverlay(animate, payload) {
@@ -234,7 +233,7 @@
           message.type === "OVERLAY_MOOD" ||
           message.type === "CHARACTER_HEALTH"
         ) {
-          if (getImg()) applyBuddyVisual(message);
+          applyBuddyVisual(message);
         }
       });
 
@@ -245,11 +244,7 @@
           if (chrome.runtime.lastError || !response) return;
           const raw = Number(response.characterHealth);
           const live = Boolean(response.liveSessionActive);
-          const health = Number.isFinite(raw)
-            ? live && raw <= 0
-              ? 95
-              : raw
-            : 95;
+          const health = Number.isFinite(raw) ? raw : 95;
           window.postMessage(
             {
               source: "focus-buddy-extension",

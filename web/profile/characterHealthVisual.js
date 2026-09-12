@@ -9,9 +9,9 @@
  * 20 → cat6.png
  * 0  → cat7.png
  *
- * Progression (after 10s on the same tab; no stage changes in the first 20s of lock-in):
- * - 2 min on-task → one stage healthier (cap at 95)
- * - 1 min distracted → one stage lower (floor at 0)
+ * Progression during lock-in:
+ * - 1s distracted → −1 health (floor at 0)
+ * - 2s on-task → +1 health (cap at 95)
  */
 
 export const CHARACTER_HEALTH_STAGES = 7;
@@ -28,16 +28,13 @@ export const SESSION_START_HEALTH = 95;
  */
 export function characterHealthStage(health) {
   const h = Math.max(0, Math.min(100, Number(health) || 0));
-  let best = 0;
-  let bestDist = Math.abs(HEALTH_STAGE_VALUES[0] - h);
-  for (let i = 1; i < HEALTH_STAGE_VALUES.length; i += 1) {
-    const dist = Math.abs(HEALTH_STAGE_VALUES[i] - h);
-    if (dist < bestDist) {
-      best = i;
-      bestDist = dist;
-    }
-  }
-  return best;
+  if (h >= 95) return 0;
+  if (h >= 80) return 1;
+  if (h >= 65) return 2;
+  if (h >= 50) return 3;
+  if (h >= 35) return 4;
+  if (h >= 20) return 5;
+  return 6;
 }
 
 /**

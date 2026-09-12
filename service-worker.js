@@ -31552,12 +31552,19 @@ This typically indicates that your device does not have a healthy Internet conne
     }
   }
   async function syncLiveCharacterHealth(health, options = {}) {
-    await waitForSignedInUser(5e3);
     let auth2;
     try {
       auth2 = getFirebaseAuth();
     } catch {
       return null;
+    }
+    if (!auth2?.currentUser?.uid) {
+      await waitForSignedInUser(400);
+      try {
+        auth2 = getFirebaseAuth();
+      } catch {
+        return null;
+      }
     }
     const userId = auth2?.currentUser?.uid;
     if (!userId) return null;
@@ -33359,17 +33366,15 @@ const DISTRACTED_DELAY_MS = 10_000;
 const LIVE_HEALTH_SYNC_MIN_MS = 1500;
 const CHARACTER_HEALTH_KEY = "characterHealth";
 const SELECTED_CHARACTER_KEY = "focusBuddy.selectedCharacter";
-/** Session starts at stage 0 (95 HP / cat.png). */
+const HEALTH_PROGRESS_KEY = "healthProgressState";
+const HEALTH_ALARM = "focus-health-tick";
+/** Session starts at 95 HP (cat.png). */
 const SESSION_START_HEALTH = 95;
 const HEALTH_STAGE_VALUES = [95, 80, 65, 50, 35, 20, 0];
-/** Stay on the same tab/status this long before on-task / off-task timers start. */
-const TAB_DWELL_MS = 10_000;
-/** No stage up/down for this long after lock-in starts (blocks stale/race drops to cat7). */
-const HEALTH_DROP_GRACE_MS = 20_000;
-/** After dwell, 2 minutes on-task → one stage healthier. */
-const ON_TASK_STEP_MS = 2 * 60 * 1000;
-/** After dwell, 1 minute distracted → one stage lower. */
-const OFF_TASK_STEP_MS = 1 * 60 * 1000;
+/** 1 second distracted → −1 health. */
+const OFF_TASK_STEP_MS = 1_000;
+/** 2 seconds on-task → +1 health. */
+const ON_TASK_STEP_MS = 2_000;
 
 let taskKeywords = [];
 let lockInActive = false;
@@ -33381,17 +33386,18 @@ let lastLiveHealthSyncAt = 0;
 let liveHealthSyncTimer = null;
 let liveHealthTickTimer = null;
 let healthResetRetryTimer = null;
-/** @type {number} 0 = healthiest … 6 = lowest */
+/** @type {number} live companion HP 0–95 */
+let sessionCharacterHealth = SESSION_START_HEALTH;
+/** @type {number} 0 = healthiest … 6 = lowest (derived from HP for stage art) */
 let sessionHealthStage = 0;
 /** @type {number} */
 let lockInStartedAt = 0;
 /**
- * Tracks dwell + accrued on-task / off-task time for stage changes.
+ * Tracks accrued on-task / off-task time for HP changes.
  * @type {{
  *   status: 'on-task'|'distracted'|null,
  *   tabId: number|null,
  *   since: number,
- *   dwellDone: boolean,
  *   accruedMs: number,
  *   lastTick: number,
  * }|null}
@@ -33405,16 +33411,14 @@ function healthFromStage(stage) {
 
 function stageFromHealth(health) {
   const h = Math.max(0, Math.min(100, Number(health) || 0));
-  let best = 0;
-  let bestDist = Math.abs(HEALTH_STAGE_VALUES[0] - h);
-  for (let i = 1; i < HEALTH_STAGE_VALUES.length; i += 1) {
-    const dist = Math.abs(HEALTH_STAGE_VALUES[i] - h);
-    if (dist < bestDist) {
-      best = i;
-      bestDist = dist;
-    }
-  }
-  return best;
+  // Threshold bands so continuous HP maps cleanly onto cat art.
+  if (h >= 95) return 0;
+  if (h >= 80) return 1;
+  if (h >= 65) return 2;
+  if (h >= 50) return 3;
+  if (h >= 35) return 4;
+  if (h >= 20) return 5;
+  return 6;
 }
 
 /**
@@ -33425,6 +33429,18 @@ function catFileForHealth(health) {
   const stage = stageFromHealth(health);
   if (stage <= 0) return "cat.png";
   return `cat${stage + 1}.png`;
+}
+
+function clampSessionHealth(health) {
+  const n = Number(health);
+  const value = Number.isFinite(n) ? n : SESSION_START_HEALTH;
+  return Math.max(0, Math.min(SESSION_START_HEALTH, Math.floor(value)));
+}
+
+function setSessionHealth(health) {
+  sessionCharacterHealth = clampSessionHealth(health);
+  sessionHealthStage = stageFromHealth(sessionCharacterHealth);
+  return sessionCharacterHealth;
 }
 
 /**
@@ -33447,8 +33463,16 @@ async function resolveBuddyVisual() {
   let characterHealth = Number.isFinite(rawHealth)
     ? rawHealth
     : SESSION_START_HEALTH;
-  if (liveSessionActive && characterHealth <= 0) {
+  // Only ignore a stale 0 right as lock-in starts (race with last session).
+  if (
+    liveSessionActive &&
+    characterHealth <= 0 &&
+    lockInActive &&
+    Date.now() - lockInStartedAt < 2_000
+  ) {
     characterHealth = SESSION_START_HEALTH;
+  } else if (lockInActive) {
+    characterHealth = sessionCharacterHealth;
   }
 
   const buddyFile =
@@ -33501,19 +33525,61 @@ async function setSelectedCharacter(characterId) {
   return id;
 }
 
-function resetHealthProgressState() {
+function resetHealthProgressState(seedStatus = null) {
   healthProgress = {
-    status: null,
+    status: seedStatus === "on-task" || seedStatus === "distracted" ? seedStatus : null,
     tabId: null,
     since: Date.now(),
-    dwellDone: false,
     accruedMs: 0,
     lastTick: Date.now(),
   };
+  void persistHealthProgress();
+}
+
+async function persistHealthProgress() {
+  if (!healthProgress) return;
+  try {
+    await chrome.storage.local.set({
+      [HEALTH_PROGRESS_KEY]: {
+        status: healthProgress.status,
+        accruedMs: healthProgress.accruedMs,
+        lastTick: healthProgress.lastTick,
+        since: healthProgress.since,
+      },
+    });
+  } catch {
+    // Best-effort; ticks still work in-memory while SW is awake.
+  }
+}
+
+async function restoreHealthProgress() {
+  try {
+    const result = await chrome.storage.local.get(HEALTH_PROGRESS_KEY);
+    const saved = result[HEALTH_PROGRESS_KEY];
+    if (!saved || typeof saved !== "object") {
+      resetHealthProgressState();
+      return;
+    }
+    const status =
+      saved.status === "on-task" || saved.status === "distracted"
+        ? saved.status
+        : null;
+    healthProgress = {
+      status,
+      tabId: null,
+      since: Number(saved.since) || Date.now(),
+      accruedMs: Math.max(0, Number(saved.accruedMs) || 0),
+      // Keep lastTick from storage so wall-clock catch-up applies after SW sleep.
+      lastTick: Number(saved.lastTick) || Date.now(),
+    };
+  } catch {
+    resetHealthProgressState();
+  }
 }
 
 /**
- * Tab or focus-status changes restart the 10s dwell before timers run.
+ * Tab changes do NOT reset accrual when focus status is unchanged
+ * (YouTube → Twitter both distracted should keep counting down).
  * @param {'on-task'|'distracted'} status
  * @param {number|null|undefined} tabId
  */
@@ -33521,68 +33587,70 @@ function noteFocusStatusForHealth(status, tabId) {
   const now = Date.now();
   const tid = typeof tabId === "number" ? tabId : null;
   if (!healthProgress) resetHealthProgressState();
-  const same =
-    healthProgress.status === status && healthProgress.tabId === tid;
-  if (same) return;
+  if (healthProgress.status === status) {
+    healthProgress.tabId = tid;
+    void persistHealthProgress();
+    return;
+  }
   healthProgress = {
     status,
     tabId: tid,
     since: now,
-    dwellDone: false,
     accruedMs: 0,
     lastTick: now,
   };
+  void persistHealthProgress();
 }
 
 /**
- * Advance on-task / off-task stage timers after the 10s tab dwell.
+ * Advance HP: −1 per 1s distracted, +1 per 2s on-task.
+ * Uses wall-clock so a sleeping service worker still applies missed time on wake.
  */
 async function tickSessionHealth() {
   if (!lockInActive) return;
+  if (!healthProgress) await restoreHealthProgress();
   if (!healthProgress) resetHealthProgressState();
 
   const now = Date.now();
-  // Cap dt so a sleeping service worker can't dump minutes of progress in one tick.
-  const dt = Math.min(2000, Math.max(0, now - (healthProgress.lastTick || now)));
+  const dt = Math.max(0, now - (healthProgress.lastTick || now));
   healthProgress.lastTick = now;
 
-  // Hard grace: never change stages right after lock-in (prevents instant cat7).
-  if (now - lockInStartedAt < HEALTH_DROP_GRACE_MS) return;
-
-  if (!healthProgress.status) return;
-
-  if (!healthProgress.dwellDone) {
-    if (now - healthProgress.since >= TAB_DWELL_MS) {
-      healthProgress.dwellDone = true;
-      healthProgress.accruedMs = 0;
-    }
+  if (!healthProgress.status) {
+    void persistHealthProgress();
     return;
   }
 
   healthProgress.accruedMs += dt;
 
+  let next = sessionCharacterHealth;
   if (healthProgress.status === "on-task") {
-    if (healthProgress.accruedMs < ON_TASK_STEP_MS) return;
-    healthProgress.accruedMs = 0;
-    if (sessionHealthStage <= 0) return; // already healthiest
-    sessionHealthStage -= 1;
-    await pushLiveCharacterHealth(healthFromStage(sessionHealthStage), {
-      liveSessionActive: true,
-      force: true,
-    });
+    const steps = Math.floor(healthProgress.accruedMs / ON_TASK_STEP_MS);
+    if (steps < 1) {
+      void persistHealthProgress();
+      return;
+    }
+    healthProgress.accruedMs -= steps * ON_TASK_STEP_MS;
+    next = Math.min(SESSION_START_HEALTH, sessionCharacterHealth + steps);
+  } else if (healthProgress.status === "distracted") {
+    const steps = Math.floor(healthProgress.accruedMs / OFF_TASK_STEP_MS);
+    if (steps < 1) {
+      void persistHealthProgress();
+      return;
+    }
+    healthProgress.accruedMs -= steps * OFF_TASK_STEP_MS;
+    next = Math.max(0, sessionCharacterHealth - steps);
+  } else {
+    void persistHealthProgress();
     return;
   }
 
-  if (healthProgress.status === "distracted") {
-    if (healthProgress.accruedMs < OFF_TASK_STEP_MS) return;
-    healthProgress.accruedMs = 0;
-    if (sessionHealthStage >= HEALTH_STAGE_VALUES.length - 1) return;
-    sessionHealthStage += 1;
-    await pushLiveCharacterHealth(healthFromStage(sessionHealthStage), {
-      liveSessionActive: true,
-      force: true,
-    });
-  }
+  void persistHealthProgress();
+  if (next === sessionCharacterHealth) return;
+  setSessionHealth(next);
+  await pushLiveCharacterHealth(sessionCharacterHealth, {
+    liveSessionActive: true,
+    force: true,
+  });
 }
 
 function stopLiveHealthTicker() {
@@ -33594,6 +33662,17 @@ function stopLiveHealthTicker() {
     clearInterval(liveHealthTickTimer);
     liveHealthTickTimer = null;
   }
+  void chrome.alarms.clear(HEALTH_ALARM);
+}
+
+async function scheduleHealthAlarm() {
+  if (!lockInActive) return;
+  try {
+    await chrome.alarms.clear(HEALTH_ALARM);
+    await chrome.alarms.create(HEALTH_ALARM, { when: Date.now() + 1000 });
+  } catch {
+    // Alarms unavailable in rare contexts.
+  }
 }
 
 function startLiveHealthTicker() {
@@ -33601,6 +33680,7 @@ function startLiveHealthTicker() {
   liveHealthTickTimer = setInterval(() => {
     void tickSessionHealth();
   }, 1000);
+  void scheduleHealthAlarm();
 }
 
 try {
@@ -33769,7 +33849,7 @@ async function finishTimer(state) {
   await writeTimer(finished);
 
   stopLiveHealthTicker();
-  const finalHealth = healthFromStage(sessionHealthStage);
+  const finalHealth = sessionCharacterHealth;
   await pushLiveCharacterHealth(finalHealth, {
     liveSessionActive: false,
     force: true,
@@ -33808,7 +33888,7 @@ async function recordFocusSessionFromTimer(timerState, characterHealth) {
   const health =
     typeof characterHealth === "number"
       ? characterHealth
-      : healthFromStage(sessionHealthStage);
+      : sessionCharacterHealth;
 
   try {
     const result = await globalThis.FocusBuddyAuth.recordCompletedSession({
@@ -33893,7 +33973,7 @@ async function estimateOnTaskRatio(startedAt, endedAt) {
  * @returns {number}
  */
 function currentSessionCharacterHealth() {
-  return healthFromStage(sessionHealthStage);
+  return sessionCharacterHealth;
 }
 
 /**
@@ -33932,21 +34012,23 @@ async function pushLiveCharacterHealth(health, options = {}) {
   // Push to open website tabs immediately (Firebase can lag or require sign-in).
   await broadcastCharacterHealthToTabs(value, liveSessionActive);
 
-  try {
-    await AUTH_READY;
-    if (!globalThis.FocusBuddyAuth?.syncLiveCharacterHealth) return false;
-    const result = await globalThis.FocusBuddyAuth.syncLiveCharacterHealth(
-      value,
-      { liveSessionActive }
-    );
-    if (!result) return false;
-    lastLiveHealthSynced = value;
-    lastLiveHealthSyncAt = Date.now();
-    return true;
-  } catch (err) {
-    console.warn("[Focus Buddy] Live health sync skipped:", err?.message || err);
-    return false;
-  }
+  // Cloud sync must not block HP ticks — unsigned auth used to stall 5s per tick.
+  void (async () => {
+    try {
+      await AUTH_READY;
+      if (!globalThis.FocusBuddyAuth?.syncLiveCharacterHealth) return;
+      const result = await globalThis.FocusBuddyAuth.syncLiveCharacterHealth(
+        value,
+        { liveSessionActive }
+      );
+      if (!result) return;
+      lastLiveHealthSynced = value;
+      lastLiveHealthSyncAt = Date.now();
+    } catch (err) {
+      console.warn("[Focus Buddy] Live health sync skipped:", err?.message || err);
+    }
+  })();
+  return true;
 }
 
 /**
@@ -33959,15 +34041,11 @@ async function broadcastCharacterHealthToTabs(health, liveSessionActive) {
   // Prefer the just-written health over possibly-stale storage read.
   const characterHealth =
     typeof health === "number" && Number.isFinite(health)
-      ? health
+      ? clampSessionHealth(health)
       : visual.characterHealth;
   const buddyFile =
     visual.characterId === "cat"
-      ? catFileForHealth(
-          liveSessionActive && characterHealth <= 0
-            ? SESSION_START_HEALTH
-            : characterHealth
-        )
+      ? catFileForHealth(characterHealth)
       : visual.buddyFile;
 
   try {
@@ -33980,10 +34058,7 @@ async function broadcastCharacterHealthToTabs(health, liveSessionActive) {
             type: "BUDDY_VISUAL",
             characterId: visual.characterId,
             buddyFile,
-            characterHealth:
-              liveSessionActive && characterHealth <= 0
-                ? SESSION_START_HEALTH
-                : characterHealth,
+            characterHealth,
             mood: visual.mood,
             liveSessionActive: Boolean(liveSessionActive),
           })
@@ -34009,13 +34084,24 @@ async function resetCharacterHealthForNewSession() {
   lastLiveHealthSynced = null;
   lastLiveHealthSyncAt = 0;
   lockInStartedAt = Date.now();
-  sessionHealthStage = stageFromHealth(SESSION_START_HEALTH);
-  resetHealthProgressState();
+  setSessionHealth(SESSION_START_HEALTH);
+  // Seed on-task so HP ticks immediately; evaluateActiveTab will correct status.
+  resetHealthProgressState("on-task");
 
   await chrome.storage.local.set({
     [CHARACTER_HEALTH_KEY]: SESSION_START_HEALTH,
     liveSessionActive: true,
+    [HEALTH_PROGRESS_KEY]: {
+      status: "on-task",
+      accruedMs: 0,
+      lastTick: Date.now(),
+      since: Date.now(),
+    },
   });
+
+  // Broadcast locally right away; cloud sync retries in the background so
+  // lock-in / timer start is never blocked on Firebase.
+  await broadcastCharacterHealthToTabs(SESSION_START_HEALTH, true);
 
   const trySync = async (attempt) => {
     const ok = await pushLiveCharacterHealth(SESSION_START_HEALTH, {
@@ -34029,7 +34115,7 @@ async function resetCharacterHealthForNewSession() {
     }, 750 * attempt);
   };
 
-  await trySync(1);
+  void trySync(1);
 }
 
 /**
@@ -34183,11 +34269,27 @@ function extractKeywords(taskText) {
 }
 
 async function loadKeywords() {
-  const result = await chrome.storage.local.get([KEYWORDS_KEY, LOCK_IN_KEY]);
+  const result = await chrome.storage.local.get([
+    KEYWORDS_KEY,
+    LOCK_IN_KEY,
+    CHARACTER_HEALTH_KEY,
+  ]);
   taskKeywords = Array.isArray(result[KEYWORDS_KEY])
     ? result[KEYWORDS_KEY]
     : [];
   lockInActive = Boolean(result[LOCK_IN_KEY]);
+  const rawHealth = Number(result[CHARACTER_HEALTH_KEY]);
+  if (Number.isFinite(rawHealth)) {
+    setSessionHealth(rawHealth);
+  }
+  if (lockInActive) {
+    await restoreHealthProgress();
+    // If status was lost, reclassify the active tab so ticks can resume.
+    if (!healthProgress?.status) {
+      void evaluateActiveTab();
+    }
+    startLiveHealthTicker();
+  }
 }
 
 async function saveKeywords(keywords) {
@@ -34220,7 +34322,7 @@ async function appendFocusLog(status, tab) {
 
 async function setCharacterMood(status) {
   await chrome.storage.local.set({ [MOOD_KEY]: status });
-  await broadcastBuddyVisual();
+  void broadcastBuddyVisual();
 }
 
 function clearDistractedTimer() {
@@ -34234,6 +34336,7 @@ async function applyTabStatus(status, tab) {
   await appendFocusLog(status, tab);
   if (lockInActive) {
     noteFocusStatusForHealth(status, tab?.id);
+    void tickSessionHealth();
   }
 
   if (status === "on-task") {
@@ -34457,23 +34560,26 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
   await setCharacterMood("on-task");
   clearDistractedTimer();
 
-  // Reset to 95 health (cat.png) before classifying tabs so the website refreshes immediately.
-  await resetCharacterHealthForNewSession();
-
+  // Start the countdown before cloud/overlay work so the popup timer never stalls.
   let timer = await readTimer();
   if (useTimer) {
-    // Reset any prior timer so a new lock-in always uses the duration from the popup.
     await cancelTimer();
     timer = await startTimer(durationSeconds);
   }
 
-  await evaluateActiveTab();
-  await showOverlayOnAllTabs(true);
-  await pushLiveCharacterHealth(SESSION_START_HEALTH, {
+  // Reset to 95 health (cat.png); cloud sync is non-blocking (see reset helper).
+  await resetCharacterHealthForNewSession();
+  startLiveHealthTicker();
+
+  // Classify ASAP so off-task accrual starts; overlays can lag.
+  void evaluateActiveTab().then(() => {
+    void tickSessionHealth();
+  });
+  void showOverlayOnAllTabs(true);
+  void pushLiveCharacterHealth(SESSION_START_HEALTH, {
     liveSessionActive: true,
     force: true,
   });
-  startLiveHealthTicker();
   return { lockInActive: true, timer };
 }
 
@@ -34486,11 +34592,14 @@ async function stopLockIn() {
     healthResetRetryTimer = null;
   }
   healthProgress = null;
-  await chrome.storage.local.set({ [LOCK_IN_KEY]: false });
+  await chrome.storage.local.set({
+    [LOCK_IN_KEY]: false,
+    [HEALTH_PROGRESS_KEY]: null,
+  });
   await setCharacterMood("on-task");
   await hideOverlayOnAllTabs();
   const timer = await cancelTimer();
-  await pushLiveCharacterHealth(healthFromStage(sessionHealthStage), {
+  await pushLiveCharacterHealth(sessionCharacterHealth, {
     liveSessionActive: false,
     force: true,
   });
@@ -34501,6 +34610,11 @@ loadKeywords();
 readTimer();
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === HEALTH_ALARM) {
+    await tickSessionHealth();
+    await scheduleHealthAlarm();
+    return;
+  }
   if (alarm.name !== TIMER_ALARM) return;
   const current = await readTimer();
   if (current.status === "running") {
@@ -34555,7 +34669,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "START_LOCK_IN") {
-    startLockIn(message).then(sendResponse);
+    startLockIn(message)
+      .then(sendResponse)
+      .catch((err) => {
+        console.error("[Focus Buddy] START_LOCK_IN failed:", err);
+        sendResponse({ ok: false, error: err?.message || "Lock-in failed." });
+      });
     return true;
   }
 
@@ -34564,9 +34683,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .get([CHARACTER_HEALTH_KEY, "liveSessionActive"])
       .then((result) => {
         const raw = Number(result[CHARACTER_HEALTH_KEY]);
+        const stored = Number.isFinite(raw) ? raw : SESSION_START_HEALTH;
         sendResponse({
-          characterHealth: Number.isFinite(raw) ? raw : SESSION_START_HEALTH,
-          liveSessionActive: Boolean(result.liveSessionActive),
+          characterHealth: lockInActive ? sessionCharacterHealth : stored,
+          liveSessionActive: Boolean(result.liveSessionActive) || lockInActive,
         });
       });
     return true;

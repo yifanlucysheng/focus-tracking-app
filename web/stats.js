@@ -38,7 +38,8 @@ let extensionHealth = null;
 let extensionLive = false;
 /** When the current live lock-in was first observed on this page. */
 let liveSessionStartedAt = 0;
-const HEALTH_DROP_GRACE_MS = 20_000;
+/** Ignore a stale 0 only in the first moments after lock-in starts. */
+const STALE_ZERO_GRACE_MS = 2_000;
 
 function renderHistory(sessions) {
   const existing = document.getElementById("stats-history");
@@ -104,10 +105,10 @@ function resolveDisplayHealth(incoming) {
   const isLive = Boolean(incoming.liveSessionActive) || extensionLive;
   const cloudHealth = Number(incoming.characterHealth);
   const extHealth = Number(extensionHealth);
-  const inGrace =
+  const inStaleZeroGrace =
     isLive &&
     liveSessionStartedAt > 0 &&
-    Date.now() - liveSessionStartedAt < HEALTH_DROP_GRACE_MS;
+    Date.now() - liveSessionStartedAt < STALE_ZERO_GRACE_MS;
 
   if (isLive && !wasLiveSessionActive) {
     liveSessionStartedAt = Date.now();
@@ -115,18 +116,15 @@ function resolveDisplayHealth(incoming) {
   }
 
   if (extensionLive && Number.isFinite(extHealth)) {
-    // Stale bridge value of 0 from before lock-in must not win during grace.
-    if (inGrace && extHealth <= 0) return SESSION_START_HEALTH;
-    if (inGrace) return Math.max(extHealth, SESSION_START_HEALTH);
+    if (inStaleZeroGrace && extHealth <= 0) return SESSION_START_HEALTH;
     return extHealth;
   }
 
   if (isLive) {
-    if (!Number.isFinite(cloudHealth) || cloudHealth <= 0) {
+    if (inStaleZeroGrace && (!Number.isFinite(cloudHealth) || cloudHealth <= 0)) {
       return SESSION_START_HEALTH;
     }
-    if (inGrace) return Math.max(cloudHealth, SESSION_START_HEALTH);
-    return cloudHealth;
+    return Number.isFinite(cloudHealth) ? cloudHealth : SESSION_START_HEALTH;
   }
 
   return Number.isFinite(cloudHealth) ? cloudHealth : 0;
@@ -187,16 +185,15 @@ function onExtensionHealthMessage(event) {
 
   if (nextLive && !extensionLive) {
     liveSessionStartedAt = Date.now();
-    extensionHealth = SESSION_START_HEALTH;
+    extensionHealth =
+      Number.isFinite(health) && health >= 0 ? health : SESSION_START_HEALTH;
   } else if (nextLive) {
-    if (!Number.isFinite(health) || health <= 0) {
-      // Ignore stale 0 while lock-in is active (unless past grace and intentionally dead).
-      if (Date.now() - liveSessionStartedAt < HEALTH_DROP_GRACE_MS) {
-        extensionHealth = SESSION_START_HEALTH;
-      } else {
-        extensionHealth = health;
-      }
-    } else {
+    if (
+      (!Number.isFinite(health) || health <= 0) &&
+      Date.now() - liveSessionStartedAt < STALE_ZERO_GRACE_MS
+    ) {
+      extensionHealth = SESSION_START_HEALTH;
+    } else if (Number.isFinite(health)) {
       extensionHealth = health;
     }
   } else {

@@ -122,12 +122,20 @@ export async function syncProfileStats(userId, stats, sessionId, sessionDoc) {
  * @param {{ liveSessionActive?: boolean }} [options]
  */
 export async function syncLiveCharacterHealth(health, options = {}) {
-  await waitForSignedInUser(5000);
+  // Don't stall every HP tick waiting for auth — return fast if signed out.
   let auth;
   try {
     auth = getFirebaseAuth();
   } catch {
     return null;
+  }
+  if (!auth?.currentUser?.uid) {
+    await waitForSignedInUser(400);
+    try {
+      auth = getFirebaseAuth();
+    } catch {
+      return null;
+    }
   }
   const userId = auth?.currentUser?.uid;
   if (!userId) return null;

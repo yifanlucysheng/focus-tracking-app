@@ -246,6 +246,7 @@ function activateLockIn() {
   // Previously useTimer required the dropdown to stay open, so lock-in often
   // started with no timer after setting a duration and closing the panel.
   const durationSeconds = durationFromInputs();
+  if (timerDropdown) timerDropdown.open = true;
   sendMessage(
     "START_LOCK_IN",
     {
@@ -254,9 +255,14 @@ function activateLockIn() {
       durationSeconds,
     },
     (response) => {
-      if (!response) return;
+      if (!response) {
+        // Message may time out while overlays inject; storage still has the timer.
+        refreshTimer();
+        return;
+      }
       setLockInUi(true);
       if (response.timer) applySnapshot(response.timer);
+      else refreshTimer();
       pollLatestFocusStatus();
     }
   );
@@ -305,6 +311,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   if (changes.lockInActive) {
     setLockInUi(changes.lockInActive.newValue);
+  }
+  if (changes.timerState) {
+    applySnapshot(changes.timerState.newValue);
   }
 });
 
