@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Focus Buddy",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A focus tracking companion.",
   "permissions": ["tabs", "storage", "alarms", "scripting"],
   "host_permissions": [
@@ -30,8 +30,6 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "sleepbunny.png",
-        "angrybunny.png",
         "moon1.png",
         "moon2.png",
         "moon3.png",

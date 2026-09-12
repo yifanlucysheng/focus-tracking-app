@@ -23,8 +23,6 @@ const REQUIRED_FILES = [
   "overlay.js",
   "site-bridge.js",
   "logo.PNG",
-  "sleepbunny.png",
-  "angrybunny.png",
   "moon1.png",
   "moon2.png",
   "moon3.png",
@@ -82,20 +80,19 @@ copyFile("style.css");
 copyFile("overlay.js");
 copyFile("site-bridge.js");
 copyFile("logo.PNG");
-copyFile("sleepbunny.png");
-copyFile("angrybunny.png");
-copyFile("moon1.png");
-copyFile("moon2.png");
-copyFile("moon3.png");
-copyFile("moon4.png");
-copyFile("moon5.png");
-copyFile("cat.png");
-copyFile("cat2.png");
-copyFile("cat3.png");
-copyFile("cat4.png");
-copyFile("cat5.png");
-copyFile("cat6.png");
-copyFile("cat7.png");
+// Website assets/ are the source of truth for buddy stage sprites.
+copyFile("assets/moon1.png", "moon1.png");
+copyFile("assets/moon2.png", "moon2.png");
+copyFile("assets/moon3.png", "moon3.png");
+copyFile("assets/moon4.png", "moon4.png");
+copyFile("assets/moon5.png", "moon5.png");
+copyFile("assets/cat.png", "cat.png");
+copyFile("assets/cat2.png", "cat2.png");
+copyFile("assets/cat3.png", "cat3.png");
+copyFile("assets/cat4.png", "cat4.png");
+copyFile("assets/cat5.png", "cat5.png");
+copyFile("assets/cat6.png", "cat6.png");
+copyFile("assets/cat7.png", "cat7.png");
 
 // secrets: prefer real local secrets; fall back to example so the SW can load
 const secretsSrc = path.join(root, "secrets.local.js");

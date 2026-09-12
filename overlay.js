@@ -1,6 +1,6 @@
 (() => {
-  // Bump so re-inject replaces older overlay copies that crashed on chrome.storage.
-  const OVERLAY_VERSION = 11;
+  // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
+  const OVERLAY_VERSION = 12;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
@@ -38,7 +38,7 @@
   }
 
   /**
-   * Moon Buddy stages 1–5 (even 20-point bands). Stage 1 = healthiest.
+   * Moon Buddy stages 1–5 (even 20-point bands). Matches website.
    * @param {number} health
    * @returns {string}
    */
@@ -54,14 +54,29 @@
     return "moon5.png";
   }
 
-  function resolveBuddyFile(payload) {
-    if (payload?.buddyFile && typeof payload.buddyFile === "string") {
-      return payload.buddyFile;
+  /**
+   * Accept only stage sprites. Legacy sleepbunny/angrybunny must not win over health stages.
+   * @param {string|null|undefined} file
+   * @param {"cat"|"sleepbunny"} characterId
+   * @returns {boolean}
+   */
+  function isStageBuddyFile(file, characterId) {
+    if (typeof file !== "string" || !file) return false;
+    const name = file.split("/").pop() || file;
+    if (characterId === "cat") {
+      return name === "cat.png" || /^cat[2-7]\.png$/i.test(name);
     }
+    return /^moon[1-5]\.png$/i.test(name);
+  }
+
+  function resolveBuddyFile(payload) {
     const characterId =
       payload?.characterId === "cat" ? "cat" : "sleepbunny";
     const health = Number(payload?.characterHealth);
     const safeHealth = Number.isFinite(health) ? health : 95;
+    if (isStageBuddyFile(payload?.buddyFile, characterId)) {
+      return String(payload.buddyFile).split("/").pop();
+    }
     if (characterId === "cat") return catFileForHealth(safeHealth);
     return moonFileForHealth(safeHealth);
   }
@@ -132,10 +147,7 @@
     const health = Number(payload?.characterHealth);
     const live = Boolean(payload?.liveSessionActive);
     const safeHealth = Number.isFinite(health) ? health : 95;
-    const file =
-      typeof payload?.buddyFile === "string"
-        ? payload.buddyFile
-        : resolveBuddyFile(payload);
+    const file = resolveBuddyFile(payload);
     try {
       window.postMessage(
         {
