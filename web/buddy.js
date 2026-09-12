@@ -2,6 +2,8 @@ import { CHARACTERS, STORAGE_KEY, loadSelectedCharacterId } from "./characters.j
 import { mountSiteNav } from "./layout.js";
 
 const preview = document.getElementById("character-preview");
+const bioName = document.getElementById("buddy-bio-name");
+const bioBlurb = document.getElementById("buddy-bio-blurb");
 const options = Array.from(document.querySelectorAll(".buddy-option"));
 
 let selectedCharacterId = loadSelectedCharacterId();
@@ -18,6 +20,9 @@ function applyCharacter(id) {
     preview.alt = character.alt;
     preview.classList.remove("is-switching");
   }, 120);
+
+  if (bioName) bioName.textContent = character.name;
+  if (bioBlurb) bioBlurb.textContent = character.blurb;
 
   options.forEach((button) => {
     const selected = button.dataset.character === id;

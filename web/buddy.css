@@ -293,6 +293,32 @@ body {
   outline-offset: 3px;
 }
 
+.buddy-option-name {
+  display: block;
+  margin-top: 6px;
+  color: var(--focus);
+  font-size: 16px;
+}
+
+.buddy-bio {
+  max-width: 28em;
+  margin-top: 4px;
+}
+
+.buddy-bio-name {
+  margin: 0 0 6px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 32px;
+  color: var(--focus);
+}
+
+.buddy-bio-blurb {
+  margin: 0;
+  color: var(--buddy);
+  font-size: 20px;
+  line-height: 1.4;
+}
+
 /* —— Dashboard —— */
 .dashboard {
   margin-top: 0;

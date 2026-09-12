@@ -1,23 +1,13 @@
+import { CHARACTERS } from "../characters.js";
+
 /** @typedef {import('./profileTypes.js').ProfileStatsView} ProfileStatsView */
 
 /**
  * @param {string} characterId
- * @returns {{ src: string, alt: string, name: string }}
+ * @returns {{ src: string, alt: string, name: string, blurb: string }}
  */
 function characterMeta(characterId) {
-  if (characterId === "cat") {
-    return {
-      src: "../assets/cat.png",
-      alt: "Cat buddy",
-      name: "Cat Buddy",
-    };
-  }
-
-  return {
-    src: "../assets/sleepbunny.png",
-    alt: "Sleep bunny buddy",
-    name: "Moon Buddy",
-  };
+  return CHARACTERS[characterId] || CHARACTERS.sleepbunny;
 }
 
 /**
@@ -50,7 +40,8 @@ export function renderProfileStats(root, stats, options = {}) {
         <div class="profile-buddy-meta">
           <p class="profile-kicker">Your companion</p>
           <h3 class="profile-buddy-name">${buddy.name}</h3>
-          <p class="profile-health-note">Make sure to stay on task to keep your companion healthy!</p>
+          <p class="profile-health-note">${buddy.blurb}</p>
+          <p class="profile-health-note">Stay on task to keep your companion healthy!</p>
           <p class="profile-health-label">
             Character Health
             <span>${empty ? "—" : `${healthPct}% · ${stats.characterHealthLabel}`}</span>
