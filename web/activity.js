@@ -244,12 +244,12 @@ async function onSendMessage(event) {
   event.preventDefault();
   const friend = selectedFriend();
   const input = document.getElementById("activity-chat-input");
+  const text = input?.value;
   if (!friend || sending) return;
   sending = true;
-  renderPanel();
+  chatError = "";
   try {
-    await sendChatMessage(friend.id, input?.value);
-    if (input) input.value = "";
+    await sendChatMessage(friend.id, text);
   } catch (error) {
     const raw = String(error?.message || error || "");
     chatError = /permission|insufficient/i.test(raw)
@@ -258,7 +258,11 @@ async function onSendMessage(event) {
   } finally {
     sending = false;
     renderPanel();
-    document.getElementById("activity-chat-input")?.focus();
+    const next = document.getElementById("activity-chat-input");
+    if (next) {
+      if (!chatError) next.value = "";
+      next.focus();
+    }
   }
 }
 

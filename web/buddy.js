@@ -1,6 +1,7 @@
 import {
   CHARACTERS,
   STORAGE_KEY,
+  characterImageUrl,
   loadSelectedCharacterIdAsync,
 } from "./characters.js";
 import { mountSiteNav } from "./layout.js";
@@ -49,7 +50,7 @@ function applyCharacter(id) {
   preview.classList.add("is-switching");
 
   window.setTimeout(() => {
-    preview.src = character.src;
+    preview.src = characterImageUrl(id);
     preview.alt = character.alt;
     preview.classList.remove("is-switching");
   }, 120);
@@ -61,9 +62,8 @@ function applyCharacter(id) {
     const selected = button.dataset.character === id;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-selected", selected ? "true" : "false");
-    const img = button.querySelector("img");
-    const optionCharacter = CHARACTERS[button.dataset.character];
-    if (img && optionCharacter) img.src = optionCharacter.src;
+    const thumb = button.querySelector("img");
+    if (thumb) thumb.src = characterImageUrl(button.dataset.character);
   });
 
   try {
