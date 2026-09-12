@@ -622,4 +622,3 @@ async function refreshPopupActivity() {
 }
 
 bootCloudSync();
-refreshPopupActivity();

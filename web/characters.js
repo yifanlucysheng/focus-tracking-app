@@ -1,6 +1,7 @@
 export const CHARACTERS = {
   cat: {
     src: "/cat.png",
+    file: "cat.png",
     alt: "Cat buddy",
     name: "Cat Buddy",
     blurb:
@@ -8,6 +9,7 @@ export const CHARACTERS = {
   },
   sleepbunny: {
     src: "/moon1.png",
+    file: "moon1.png",
     alt: "Moon buddy",
     name: "Moon Buddy",
     blurb:
@@ -16,6 +18,19 @@ export const CHARACTERS = {
 };
 
 export const STORAGE_KEY = "focusBuddy.selectedCharacter";
+
+/** Image URL that works on the Vite site and chrome-extension dashboard pages. */
+export function characterImageUrl(id) {
+  const character = CHARACTERS[id] || CHARACTERS.sleepbunny;
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime?.getURL) {
+      return chrome.runtime.getURL(character.file);
+    }
+  } catch {
+    // Not running as an extension page.
+  }
+  return character.src;
+}
 
 export function loadSelectedCharacterId() {
   try {

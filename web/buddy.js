@@ -1,4 +1,9 @@
-import { CHARACTERS, STORAGE_KEY, loadSelectedCharacterId } from "./characters.js";
+import {
+  CHARACTERS,
+  STORAGE_KEY,
+  characterImageUrl,
+  loadSelectedCharacterId,
+} from "./characters.js";
 import { mountSiteNav } from "./layout.js";
 import { isCloudConfigured, updateUserDoc } from "./cloud.js";
 
@@ -9,6 +14,20 @@ const options = Array.from(document.querySelectorAll(".buddy-option"));
 
 let selectedCharacterId = loadSelectedCharacterId();
 
+function pushCharacterToExtension(id) {
+  try {
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) return;
+    chrome.runtime.sendMessage(
+      { type: "SET_SELECTED_CHARACTER", characterId: id },
+      () => {
+        void chrome.runtime.lastError;
+      }
+    );
+  } catch {
+    // Not running inside the extension.
+  }
+}
+
 function applyCharacter(id) {
   const character = CHARACTERS[id];
   if (!character || !preview) return;
@@ -17,7 +36,7 @@ function applyCharacter(id) {
   preview.classList.add("is-switching");
 
   window.setTimeout(() => {
-    preview.src = character.src;
+    preview.src = characterImageUrl(id);
     preview.alt = character.alt;
     preview.classList.remove("is-switching");
   }, 120);
@@ -29,6 +48,8 @@ function applyCharacter(id) {
     const selected = button.dataset.character === id;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-selected", selected ? "true" : "false");
+    const thumb = button.querySelector("img");
+    if (thumb) thumb.src = characterImageUrl(button.dataset.character);
   });
 
   try {
@@ -50,9 +71,24 @@ function applyCharacter(id) {
     // Ignore if messaging is blocked.
   }
 
+  pushCharacterToExtension(id);
+
   if (isCloudConfigured()) {
     void updateUserDoc({ characterId: id }).catch(() => {});
   }
+}
+
+async function preferredCharacterId() {
+  try {
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      const stored = await chrome.storage.local.get(STORAGE_KEY);
+      const fromExt = stored[STORAGE_KEY];
+      if (fromExt && CHARACTERS[fromExt]) return fromExt;
+    }
+  } catch {
+    // Fall back to page storage.
+  }
+  return loadSelectedCharacterId();
 }
 
 options.forEach((button) => {
@@ -62,4 +98,6 @@ options.forEach((button) => {
 });
 
 mountSiteNav("home");
-applyCharacter(selectedCharacterId);
+void preferredCharacterId().then((id) => {
+  applyCharacter(id);
+});

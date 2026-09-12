@@ -74,7 +74,11 @@ body {
 }
 
 .popup-panel[hidden] {
-  display: none;
+  display: none !important;
+}
+
+#activity-panel[hidden] {
+  display: none !important;
 }
 
 #timer-dropdown {

@@ -540,11 +540,21 @@ export async function ensureChat(otherUid) {
   const { doc, setDoc } = firestoreFns;
   const members = [uid, otherUid].sort();
   const chatId = members.join("_");
-  await setDoc(
-    doc(db, "chats", chatId),
-    { members, updatedAt: Date.now() },
-    { merge: true }
-  );
+  try {
+    await setDoc(
+      doc(db, "chats", chatId),
+      { members, updatedAt: Date.now() },
+      { merge: true }
+    );
+  } catch (error) {
+    const raw = String(error?.message || error || "");
+    if (/permission|insufficient/i.test(raw)) {
+      throw new Error(
+        "Messaging needs updated Firestore rules. In Firebase Console open Firestore → Rules, paste firestore.rules from this project, and click Publish."
+      );
+    }
+    throw error;
+  }
   return chatId;
 }
 
