@@ -6,7 +6,7 @@
   }
 
   // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
-  const OVERLAY_VERSION = 16;
+  const OVERLAY_VERSION = 19;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   document.getElementById("focus-buddy-overlay-host")?.remove();
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
@@ -147,8 +147,10 @@
           position: fixed;
           left: 148px;
           bottom: 36px;
-          max-width: 240px;
-          padding: 10px 12px;
+          max-width: min(360px, calc(100vw - 180px));
+          max-height: 56vh;
+          min-height: 72px;
+          padding: 14px 16px;
           border-radius: 16px 16px 16px 4px;
           background: #f7efd8;
           color: #2a186b;
@@ -157,6 +159,8 @@
           pointer-events: auto;
           cursor: pointer;
           z-index: 2147483647;
+          overflow-y: auto;
+          overscroll-behavior: contain;
         }
         .chat-bubble[hidden] {
           display: none !important;

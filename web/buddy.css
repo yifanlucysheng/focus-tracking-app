@@ -1429,12 +1429,13 @@ body:has(.intro-section) .intro-section {
 .activity-panel {
   position: fixed;
   z-index: 3;
-  top: 92px;
+  top: 56px;
   right: 20px;
-  bottom: 20px;
-  width: min(380px, calc(100vw - 28px));
+  bottom: 16px;
+  width: min(520px, calc(100vw - 28px));
   display: flex;
   flex-direction: column;
+  min-height: 0;
   padding: 18px 20px 16px;
   border-radius: 24px;
   background: rgba(247, 239, 216, 0.94);
@@ -1448,6 +1449,7 @@ body:has(.intro-section) .intro-section {
 }
 
 .activity-panel-close {
+  flex-shrink: 0;
   align-self: flex-end;
   margin-bottom: 4px;
   border: none;
@@ -1460,15 +1462,20 @@ body:has(.intro-section) .intro-section {
 .activity-panel-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
-  flex: 1;
+  flex: 1 1 0;
   overflow: hidden;
 }
 
+.activity-panel-body > *:not(.activity-chat) {
+  flex-shrink: 0;
+}
+
 .activity-panel-avatar {
-  width: 88px;
-  height: 88px;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
   object-fit: contain;
   align-self: center;
 }
@@ -1478,17 +1485,26 @@ body:has(.intro-section) .intro-section {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  flex: 1;
+  flex: 1 1 0;
   margin-top: 8px;
+}
+
+.activity-chat .field-label {
+  flex-shrink: 0;
+  margin: 0;
 }
 
 .activity-chat-thread {
   list-style: none;
   margin: 0;
   padding: 8px;
-  flex: 1;
-  min-height: 120px;
-  overflow: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1502,7 +1518,7 @@ body:has(.intro-section) .intro-section {
 }
 
 .activity-chat-bubble {
-  max-width: 85%;
+  max-width: 92%;
   padding: 8px 12px;
   border-radius: 16px;
   font-size: 15px;
@@ -1524,8 +1540,10 @@ body:has(.intro-section) .intro-section {
 
 .activity-chat-form {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
   align-items: center;
+  padding-top: 4px;
 }
 
 .activity-chat-form .field-input {
@@ -1541,7 +1559,7 @@ body:has(.intro-section) .intro-section {
     right: 12px;
     bottom: 12px;
     width: auto;
-    height: min(58vh, 460px);
+    height: min(78vh, 640px);
   }
 
   .activity-seat {

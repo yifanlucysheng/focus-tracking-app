@@ -177,7 +177,16 @@ function renderPanel() {
   `;
 
   const threadEl = document.getElementById("activity-chat-thread");
-  if (threadEl) threadEl.scrollTop = threadEl.scrollHeight;
+  if (threadEl) {
+    threadEl.scrollTop = threadEl.scrollHeight;
+    threadEl.addEventListener(
+      "wheel",
+      (event) => {
+        event.stopPropagation();
+      },
+      { passive: true }
+    );
+  }
 
   document.getElementById("activity-chat-form")?.addEventListener("submit", onSendMessage);
 }
