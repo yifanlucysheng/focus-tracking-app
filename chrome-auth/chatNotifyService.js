@@ -63,29 +63,39 @@ function watchMessages(uid, chatId, onBubble) {
     orderBy("createdAt", "asc")
   );
   let primed = false;
-  const unsub = onSnapshot(messages, (snap) => {
-    if (!primed) {
-      primed = true;
-      const cutoff = Date.now() - 8000;
-      snap.docs.forEach((item) => {
-        const data = item.data() || {};
-        if (data.fromUid === uid) return;
-        if (Number(data.createdAt) < cutoff) return;
-        const text = String(data.text || "").trim();
-        if (!text) return;
-        void usernameFor(data.fromUid).then((fromUsername) => {
-          onBubble({
-            fromUid: data.fromUid,
-            fromUsername,
-            text,
-            messageId: item.id,
+  const unsub = onSnapshot(
+    messages,
+    (snap) => {
+      if (!primed) {
+        primed = true;
+        const cutoff = Date.now() - 8000;
+        snap.docs.forEach((item) => {
+          const data = item.data() || {};
+          if (data.fromUid === uid) return;
+          if (Number(data.createdAt) < cutoff) return;
+          const text = String(data.text || "").trim();
+          if (!text) return;
+          void usernameFor(data.fromUid).then((fromUsername) => {
+            onBubble({
+              fromUid: data.fromUid,
+              fromUsername,
+              text,
+              messageId: item.id,
+            });
           });
         });
-      });
-      return;
+        return;
+      }
+      snap.docChanges().forEach((change) => emitAdded(uid, change, onBubble));
+    },
+    (err) => {
+      watchingChats.delete(chatId);
+      console.warn(
+        "[Focus Buddy] Chat message listener failed (publish firestore.rules if this persists):",
+        err?.code || err?.message || err
+      );
     }
-    snap.docChanges().forEach((change) => emitAdded(uid, change, onBubble));
-  });
+  );
   unsubs.push(unsub);
 }
 
@@ -109,9 +119,18 @@ export function startIncomingChatWatch(onBubble) {
       collection(getFirebaseDb(), "chats"),
       where("members", "array-contains", uid)
     );
-    const unsubChats = onSnapshot(chatsQuery, (snap) => {
-      snap.docs.forEach((item) => watchMessages(uid, item.id, onBubble));
-    });
+    const unsubChats = onSnapshot(
+      chatsQuery,
+      (snap) => {
+        snap.docs.forEach((item) => watchMessages(uid, item.id, onBubble));
+      },
+      (err) => {
+        console.warn(
+          "[Focus Buddy] Chat list listener failed (sign in + publish firestore.rules if this persists):",
+          err?.code || err?.message || err
+        );
+      }
+    );
     unsubs.push(unsubChats);
   });
   unsubs.push(unsubAuth);

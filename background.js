@@ -513,32 +513,8 @@ const AUTH_READY = (async () => {
   }
 })();
 
-AUTH_READY.then(() => {
-  if (!globalThis.FocusBuddyAuth?.startIncomingChatWatch) return;
-  globalThis.FocusBuddyAuth.startIncomingChatWatch((payload) => {
-    void broadcastChatBubble(payload);
-  });
-});
-
-async function broadcastChatBubble(payload) {
-  const tabs = await chrome.tabs.query({});
-  await Promise.all(
-    tabs.map(async (tab) => {
-      if (tab.id == null) return;
-      try {
-        await chrome.tabs.sendMessage(tab.id, {
-          type: "CHAT_BUBBLE",
-          fromUid: payload.fromUid,
-          fromUsername: payload.fromUsername,
-          text: payload.text,
-          messageId: payload.messageId,
-        });
-      } catch {
-        // chrome://, Web Store, or tab with no content script.
-      }
-    })
-  );
-}
+// Incoming overlay chat bubbles are paused (Firestore chat listeners → permission-denied).
+// To restore: AUTH_READY.then(() => FocusBuddyAuth.startIncomingChatWatch(broadcastChatBubble)).
 
 /**
  * @returns {Promise<import('./chrome-auth/authService.js').ExtensionAuthState>}
