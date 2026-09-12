@@ -30508,6 +30508,12 @@ async function __PRIVATE_getEventManager(e2) {
   const t2 = await __PRIVATE_ensureOnlineComponents(e2), n2 = t2.eventManager;
   return n2.onListen = __PRIVATE_syncEngineListen.bind(null, t2.syncEngine), n2.onUnlisten = __PRIVATE_syncEngineUnlisten.bind(null, t2.syncEngine), n2.onFirstRemoteStoreListen = __PRIVATE_triggerRemoteStoreListen.bind(null, t2.syncEngine), n2.onLastRemoteStoreUnlisten = __PRIVATE_triggerRemoteStoreUnlisten.bind(null, t2.syncEngine), n2;
 }
+function __PRIVATE_firestoreClientListen(e2, t2, n2, r2) {
+  const i2 = new __PRIVATE_AsyncObserver(r2), s2 = new __PRIVATE_QueryListener(t2, i2, n2);
+  return e2.asyncQueue.enqueueAndForget((async () => __PRIVATE_eventManagerListen(await __PRIVATE_getEventManager(e2), s2))), () => {
+    i2.Va(), e2.asyncQueue.enqueueAndForget((async () => __PRIVATE_eventManagerUnlisten(await __PRIVATE_getEventManager(e2), s2)));
+  };
+}
 function __PRIVATE_firestoreClientGetDocumentViaSnapshotListener(t2, n2, r2 = {}) {
   const i2 = new __PRIVATE_Deferred();
   return t2.asyncQueue.enqueueAndForget((async () => (function __PRIVATE_readDocumentViaSnapshotListener(t3, n3, r3, i3, s2) {
@@ -31332,6 +31338,14 @@ function __PRIVATE_validateNewFieldFilter(e$1, t2) {
   if (null !== n2)
     throw n2 === t2.op ? new e(ta.INVALID_ARGUMENT, `Invalid query. You cannot use more than one '${t2.op.toString()}' filter.`) : new e(ta.INVALID_ARGUMENT, `Invalid query. You cannot use '${t2.op.toString()}' filters with '${n2.toString()}' filters.`);
 }
+function __PRIVATE_isPartialObserver(e2) {
+  return (function __PRIVATE_implementsAnyMethods(e3, t2) {
+    if ("object" != typeof e3 || null === e3) return false;
+    const n2 = e3;
+    for (const e4 of t2) if (e4 in n2 && "function" == typeof n2[e4]) return true;
+    return false;
+  })(e2, ["next", "error", "complete"]);
+}
 function getDoc(e2) {
   e2 = ra(e2, aa);
   const t2 = ra(e2.firestore, da), n2 = oa(t2);
@@ -31358,6 +31372,44 @@ function updateDoc(e2, t2, n2, ...r2) {
 }
 function deleteDoc(e2) {
   return executeWrite(ra(e2.firestore, da), [new __PRIVATE_DeleteMutation(e2._key, Precondition.none())]);
+}
+function onSnapshot(e2, ...t2) {
+  e2 = getModularInstance(e2);
+  let n2 = {
+    includeMetadataChanges: false,
+    source: "default"
+  }, r2 = 0;
+  "object" != typeof t2[r2] || __PRIVATE_isPartialObserver(t2[r2]) || (n2 = t2[r2++]);
+  const s2 = {
+    includeMetadataChanges: n2.includeMetadataChanges,
+    source: n2.source
+  };
+  if (__PRIVATE_isPartialObserver(t2[r2])) {
+    const e3 = t2[r2];
+    t2[r2] = e3.next?.bind(e3), t2[r2 + 1] = e3.error?.bind(e3), t2[r2 + 2] = e3.complete?.bind(e3);
+  }
+  let a, i2, c2;
+  if (e2 instanceof aa) i2 = ra(e2.firestore, da), c2 = __PRIVATE_newQueryForPath(e2._key.path), a = {
+    next: (n3) => {
+      t2[r2] && t2[r2](__PRIVATE_convertToDocSnapshot(i2, e2, n3));
+    },
+    error: t2[r2 + 1],
+    complete: t2[r2 + 2]
+  };
+  else {
+    const n3 = ra(e2, Query);
+    i2 = ra(n3.firestore, da), c2 = n3._query;
+    const s3 = new ua(i2);
+    a = {
+      next: (e3) => {
+        t2[r2] && t2[r2](new QuerySnapshot(i2, s3, n3, e3));
+      },
+      error: t2[r2 + 1],
+      complete: t2[r2 + 2]
+    }, __PRIVATE_validateHasExplicitOrderByForLimitToLast(e2._query);
+  }
+  const u2 = oa(i2);
+  return __PRIVATE_firestoreClientListen(u2, c2, s2, a);
 }
 function executeWrite(e2, t2) {
   const n2 = oa(e2);
@@ -31406,6 +31458,7 @@ export {
   getFirestore,
   initializeApp,
   onAuthStateChanged,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,

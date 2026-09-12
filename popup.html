@@ -5,6 +5,22 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <section id="auth-section" class="auth-section" aria-label="FocusBuddy account">
+      <p id="auth-status" class="auth-status">Checking FocusBuddy connection…</p>
+      <form id="auth-form" class="auth-form" hidden>
+        <label class="auth-label" for="auth-email">Email</label>
+        <input id="auth-email" class="auth-input" type="email" autocomplete="username" required />
+        <label class="auth-label" for="auth-password">Password</label>
+        <input id="auth-password" class="auth-input" type="password" autocomplete="current-password" required />
+        <button id="auth-submit" class="auth-submit" type="submit">Sign in</button>
+        <p id="auth-error" class="auth-error" hidden></p>
+      </form>
+      <div id="auth-signed-in" class="auth-signed-in" hidden>
+        <p id="auth-user-line" class="auth-user-line"></p>
+        <button id="auth-signout" class="auth-signout" type="button">Sign out</button>
+      </div>
+    </section>
+
     <nav class="popup-tabs" role="tablist" aria-label="Extension pages">
       <button
         id="tab-home-btn"
@@ -124,6 +140,7 @@
       </div>
     </div>
 
+    <script src="popup-auth.js"></script>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

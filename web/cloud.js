@@ -1,9 +1,12 @@
 import { firebaseConfig } from "./firebase-config.js";
 import {
+  applyXp,
   calculateFocusStreakDays,
-  deriveLevelFromXp,
-  XP_PER_FOCUSED_MINUTE,
+  calculateProfileStats,
+  calculateSessionXp,
+  normalizeProgressXp,
 } from "./profile/calculateStats.js";
+import { publicSessionSummaryFromStats } from "./profile/sessionSummary.js";
 
 let app = null;
 let auth = null;
@@ -66,15 +69,10 @@ export async function signUpWithEmail({ email, password, username }) {
 
   const { doc, getDoc, setDoc, serverTimestamp } = firestoreFns;
   const nameRef = doc(db, "usernames", key);
-  try {
-    const existing = await getDoc(nameRef);
-    if (existing.exists()) throw new Error("That username is taken.");
-  } catch (error) {
-    if (error?.message && /taken/i.test(error.message)) throw error;
-    // Username lookup can fail before sign-in if rules are still locked; continue and let create fail clearly.
-  }
+  const existing = await getDoc(nameRef);
+  if (existing.exists()) throw new Error("That username is taken.");
 
-  const cred = await authFns.createUserWithEmailAndPassword(auth, String(email || "").trim(), password);
+  const cred = await authFns.createUserWithEmailAndPassword(auth, email, password);
   const uid = cred.user.uid;
   await setDoc(doc(db, "users", uid), {
     username: key,
@@ -140,7 +138,11 @@ function dayStartMs(now = Date.now()) {
 }
 
 export function summarizeSessionsForPublic(sessions, now = Date.now()) {
-  const completed = sessions.filter((s) => s.completed);
+  const completed = sessions
+    .filter((s) => s.completed)
+    .slice()
+    .sort((a, b) => (a.endedAt || 0) - (b.endedAt || 0));
+
   const todayStart = dayStartMs(now);
   const weekStart = weekStartMs(now);
   const today = completed.filter((s) => s.endedAt >= todayStart);
@@ -152,19 +154,51 @@ export function summarizeSessionsForPublic(sessions, now = Date.now()) {
   );
   const todayMs = today.reduce((sum, s) => sum + (s.durationMs || 0), 0);
   const weeklyFocusMs = week.reduce((sum, s) => sum + (s.durationMs || 0), 0);
-  const xp = Math.floor(
-    completed.reduce((sum, s) => sum + (s.durationMs || 0) * (s.onTaskRatio ?? 0), 0) /
-      60000
-  ) * XP_PER_FOCUSED_MINUTE;
-  const levelInfo = deriveLevelFromXp(xp);
+
+  // Replay sessions with Iris progress XP (level + XP toward next).
+  let level = 1;
+  let xp = 0;
+  for (const session of completed) {
+    const durationMs = Math.max(0, Number(session.durationMs) || 0);
+    const onTaskRatio =
+      typeof session.onTaskRatio === "number"
+        ? Math.min(1, Math.max(0, session.onTaskRatio))
+        : (Number(session.onTaskPercent) || 100) / 100;
+    const focusedMinutes = Math.floor((durationMs * onTaskRatio) / 60000);
+    const earned = calculateSessionXp(focusedMinutes, true);
+    const after = applyXp(level, xp, earned);
+    level = after.level;
+    xp = after.xp;
+  }
+  const progress = normalizeProgressXp(level, xp, { xpModel: "progress" });
+  const streakDays = calculateFocusStreakDays(completed, now);
+  const localView = calculateProfileStats(
+    {
+      sessions: completed,
+      level: progress.level,
+      xp: progress.xp,
+      xpModel: "progress",
+      focusStreak: streakDays,
+      lastCompletedFocusDate: null,
+      updatedAt: now,
+    },
+    now
+  );
+  const summary = publicSessionSummaryFromStats(localView);
 
   return {
     todayFocusPercent: todayMs ? Math.round((todayOnTaskMs / todayMs) * 100) : 0,
     weeklyFocusMs,
-    streakDays: calculateFocusStreakDays(completed, now),
-    sessionsCompleted: completed.length,
-    xp,
-    level: levelInfo.level,
+    streakDays,
+    sessionsCompleted: summary.sessions_completed ?? completed.length,
+    xp: progress.xp,
+    level: progress.level,
+    xpModel: "progress",
+    longestSessionMs: summary.longest_session_ms ?? 0,
+    topDistraction: summary.top_distraction ?? null,
+    topProductiveSite: summary.top_productive_site ?? null,
+    characterHealth: summary.character_health ?? 0,
+    liveSessionActive: false,
     updatedAt: now,
   };
 }
@@ -173,13 +207,21 @@ export async function saveSession(session) {
   const uid = currentUid();
   if (!uid) return null;
   await loadSdk();
-  const { doc, setDoc, collection, getDocs, query, orderBy } = firestoreFns;
+  const { doc, setDoc, getDoc, collection, getDocs, query, orderBy } = firestoreFns;
   const ref = doc(db, "users", uid, "sessions", session.id);
   await setDoc(ref, session);
   const snaps = await getDocs(query(collection(db, "users", uid, "sessions"), orderBy("endedAt", "desc")));
   const sessions = snaps.docs.map((item) => item.data());
   const publicStats = summarizeSessionsForPublic(sessions);
-  await setDoc(doc(db, "users", uid, "public", "stats"), publicStats);
+
+  const existingSnap = await getDoc(doc(db, "users", uid, "public", "stats"));
+  const existing = existingSnap.exists() ? existingSnap.data() : null;
+  if (existing?.liveSessionActive) {
+    delete publicStats.characterHealth;
+    delete publicStats.liveSessionActive;
+  }
+
+  await setDoc(doc(db, "users", uid, "public", "stats"), publicStats, { merge: true });
   return session;
 }
 
@@ -236,7 +278,6 @@ export async function sendFriendRequest(username) {
     fromUsername: me?.username || "friend",
     createdAt: Date.now(),
   });
-  return { sent: true };
 }
 
 export async function listIncomingRequests() {
@@ -255,6 +296,14 @@ export async function acceptFriendRequest(fromUid) {
   const { doc, setDoc, deleteDoc } = firestoreFns;
   await setDoc(doc(db, "friends", uid, "accepted", fromUid), { uid: fromUid, since: Date.now() });
   await setDoc(doc(db, "friends", fromUid, "accepted", uid), { uid, since: Date.now() });
+  await deleteDoc(doc(db, "friendRequests", uid, "incoming", fromUid));
+}
+
+export async function rejectFriendRequest(fromUid) {
+  const uid = currentUid();
+  if (!uid) throw new Error("Sign in first.");
+  await loadSdk();
+  const { doc, deleteDoc } = firestoreFns;
   await deleteDoc(doc(db, "friendRequests", uid, "incoming", fromUid));
 }
 
@@ -322,8 +371,42 @@ export async function loadFriendsActivity() {
 export async function loadOwnPublicStats() {
   const uid = currentUid();
   if (!uid) return null;
+  await loadSdk();
+  const { doc, getDoc } = firestoreFns;
+  const snap = await getDoc(doc(db, "users", uid, "public", "stats"));
+  if (snap.exists()) return snap.data();
   const sessions = await loadMySessions();
   return summarizeSessionsForPublic(sessions);
+}
+
+/**
+ * Live-listen to the signed-in user's public stats (e.g. mid-session character health).
+ * @param {(stats: object|null) => void} callback
+ * @returns {Promise<() => void>} unsubscribe
+ */
+export async function listenOwnPublicStats(callback) {
+  const uid = currentUid();
+  if (!uid) {
+    callback(null);
+    return () => {};
+  }
+  await loadSdk();
+  const { doc, onSnapshot } = firestoreFns;
+  if (typeof onSnapshot !== "function") {
+    const stats = await loadOwnPublicStats();
+    callback(stats);
+    return () => {};
+  }
+  return onSnapshot(
+    doc(db, "users", uid, "public", "stats"),
+    (snap) => {
+      callback(snap.exists() ? snap.data() : null);
+    },
+    (err) => {
+      console.warn("[Focus Buddy] Public stats listener failed:", err);
+      callback(null);
+    }
+  );
 }
 
 export async function saveNowPlaying(payload) {

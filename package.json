@@ -1,13 +1,24 @@
 {
   "name": "focus-tracking-app",
   "private": true,
+  "version": "0.1.0",
+  "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build && npm run build:extension",
+    "build:web": "vite build",
+    "preview": "vite preview",
+    "build:extension-auth": "esbuild chrome-auth/entry.js --bundle --format=iife --outfile=vendor/focusbuddy-auth.iife.js --platform=browser",
+    "build:extension-sw": "node scripts/build-service-worker.mjs",
+    "build:extension": "node scripts/package-extension.mjs",
     "bundle:firebase": "esbuild web/firebase-sdk.js --bundle --format=esm --outfile=web/vendor/firebase.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
     "firebase": "^12.19.0"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "vite": "^6.3.5"
   }
 }

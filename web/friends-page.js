@@ -12,6 +12,7 @@ import {
   loadFriendsActivity,
   loadOwnPublicStats,
   loadUserDoc,
+  rejectFriendRequest,
   sendFriendRequest,
 } from "./cloud.js";
 import { buildLeaderboardView, currentUserAsFriend } from "./friends/calculateLeaderboard.js";
@@ -20,14 +21,128 @@ import { renderFriendsLeaderboard } from "./friends/renderFriends.js";
 const friendsRoot = document.getElementById("friends-root");
 /** @type {'level' | 'streak'} */
 let leaderboardMode = "level";
+let friendsAddInput = "";
+/** @type {{ kind: 'idle' | 'error' | 'success' | 'loading', message: string }} */
+let friendsAddStatus = { kind: "idle", message: "" };
+let friendsAddBusy = false;
+/** @type {string|null} */
+let requestActionId = null;
+let requestsError = "";
 
 mountSiteNav("friends");
 mountSectionDivider("Friends");
 
-function formatWeekly(ms) {
-  const minutes = Math.round((Number(ms) || 0) / 60000);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+/**
+ * @param {string} username
+ */
+async function handleAddFriend(username) {
+  const trimmed = String(username || "").trim();
+  friendsAddInput = trimmed;
+
+  if (!trimmed) {
+    friendsAddStatus = { kind: "error", message: "Enter a username." };
+    await refresh();
+    return;
+  }
+
+  if (!isCloudConfigured() || !currentUid()) {
+    friendsAddStatus = {
+      kind: "error",
+      message: "Sign in on the Settings page to add friends.",
+    };
+    await refresh();
+    return;
+  }
+
+  friendsAddBusy = true;
+  friendsAddStatus = { kind: "loading", message: "Sending…" };
+  await refresh();
+
+  try {
+    await sendFriendRequest(trimmed);
+    friendsAddInput = "";
+    friendsAddStatus = { kind: "success", message: "Sent!" };
+  } catch (error) {
+    friendsAddStatus = {
+      kind: "error",
+      message: error?.message || "Could not send friend request.",
+    };
+  } finally {
+    friendsAddBusy = false;
+    await refresh();
+  }
+}
+
+/**
+ * Map Firebase incoming docs into the shape renderFriends expects.
+ * @param {Array<{ id: string, fromUid?: string, fromUsername?: string }>} requests
+ */
+function mapIncomingRequests(requests) {
+  return requests.map((req) => {
+    const fromUid = req.fromUid || req.id;
+    return {
+      id: fromUid,
+      requester: {
+        id: fromUid,
+        username: req.fromUsername || "unknown",
+      },
+    };
+  });
+}
+
+/**
+ * @param {string} fromUid
+ * @param {'accept' | 'deny'} action
+ */
+async function handleRequestAction(fromUid, action) {
+  if (!fromUid || requestActionId) return;
+  requestActionId = fromUid;
+  requestsError = "";
+  await refresh();
+
+  try {
+    if (action === "accept") {
+      await acceptFriendRequest(fromUid);
+    } else {
+      await rejectFriendRequest(fromUid);
+    }
+  } catch (error) {
+    requestsError =
+      error?.message ||
+      (action === "accept"
+        ? "Could not accept friend request."
+        : "Could not deny friend request.");
+  } finally {
+    requestActionId = null;
+    await refresh();
+  }
+}
+
+/**
+ * @param {object} handlers
+ */
+function renderHandlers(handlers) {
+  return {
+    addInputValue: friendsAddInput,
+    addBusy: friendsAddBusy,
+    addStatus: friendsAddStatus,
+    requestActionId,
+    requestsError,
+    onModeChange: (mode) => {
+      leaderboardMode = mode;
+      refresh();
+    },
+    onAddFriend: (username) => {
+      void handleAddFriend(username);
+    },
+    onAcceptRequest: (id) => {
+      void handleRequestAction(id, "accept");
+    },
+    onDeclineRequest: (id) => {
+      void handleRequestAction(id, "deny");
+    },
+    ...handlers,
+  };
 }
 
 async function refresh() {
@@ -47,22 +162,18 @@ async function refresh() {
       username: "You",
     });
     const view = buildLeaderboardView([you], you.id, leaderboardMode);
-    renderFriendsLeaderboard(friendsRoot, view, {
-      demoNotice: bootNote || "Sign in on the Settings page to add friends by username.",
-      onModeChange: (mode) => {
-        leaderboardMode = mode;
-        refresh();
-      },
-      onAddFriend: async (username) => {
-        try {
-          await sendFriendRequest(username);
-          refresh();
-        } catch (error) {
-          const note = friendsRoot.querySelector(".friends-demo-note");
-          if (note) note.textContent = error.message;
-        }
-      },
-    });
+    renderFriendsLeaderboard(
+      friendsRoot,
+      view,
+      renderHandlers({
+        username: "You",
+        addStatus:
+          friendsAddStatus.kind === "idle" && bootNote
+            ? { kind: "error", message: bootNote || "Sign in on Settings to add friends." }
+            : friendsAddStatus,
+        incomingRequests: [],
+      })
+    );
     return;
   }
 
@@ -95,57 +206,24 @@ async function refresh() {
     p.hiddenStats ? { ...p, focusLevel: 0, xp: 0, focusStreak: 0 } : p
   );
   const view = buildLeaderboardView(comparable, you.id, leaderboardMode);
+  const requests = mapIncomingRequests(await listIncomingRequests());
 
-  const requests = await listIncomingRequests();
+  renderFriendsLeaderboard(
+    friendsRoot,
+    view,
+    renderHandlers({
+      username: me?.username || "You",
+      incomingRequests: requests,
+    })
+  );
 
-  renderFriendsLeaderboard(friendsRoot, view, {
-    incomingRequests: requests,
-    demoNotice:
-      "Add a friend by username once. They only need to tap Accept — they should not type your name back.",
-    onModeChange: (mode) => {
-      leaderboardMode = mode;
-      refresh();
-    },
-    onAddFriend: async (username) => {
-      try {
-        const result = await sendFriendRequest(username);
-        const note = friendsRoot.querySelector(".friends-demo-note");
-        if (note) {
-          note.textContent = result?.accepted
-            ? "They already asked you — you're friends now."
-            : "Friend request sent. They can Accept it without typing your username.";
-        }
-        if (result?.accepted) refresh();
-      } catch (error) {
-        const note = friendsRoot.querySelector(".friends-demo-note");
-        if (note) note.textContent = error.message;
-      }
-    },
-    onAcceptRequest: async (fromUid, button) => {
-      if (button) button.disabled = true;
-      try {
-        await acceptFriendRequest(fromUid);
-        await refresh();
-      } catch (error) {
-        if (button) button.disabled = false;
-        const note = friendsRoot.querySelector(".friends-demo-note");
-        if (note) {
-          note.textContent =
-            error.message ||
-            "Could not accept. Publish the latest firestore.rules in Firebase Console, then try again.";
-        }
-      }
-    },
-  });
-
+  // Keep "Stats hidden" for friends who opted out; otherwise leave the shared label format.
   friendsRoot.querySelectorAll(".friends-leaderboard .friends-row-meta").forEach((meta, index) => {
     const entry = view.entries[index];
     const friend = friends.find((item) => item.id === entry?.profile.id);
     if (!friend) return;
     if (!friend.shareStats) {
       meta.textContent = "Stats hidden";
-    } else if (friend.stats) {
-      meta.textContent = `Level ${friend.stats.level} · ${friend.stats.streakDays} day streak · ${friend.stats.todayFocusPercent}% today · ${formatWeekly(friend.stats.weeklyFocusMs)} this week`;
     }
   });
 }

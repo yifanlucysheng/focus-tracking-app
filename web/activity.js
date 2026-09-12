@@ -10,15 +10,23 @@ const root = document.getElementById("activity-root");
 const banner = document.getElementById("activity-banner");
 
 function avatarSrc(characterId) {
-  return characterId === "cat" ? "../assets/cat.png" : "../assets/sleepbunny.png";
+  return characterId === "cat" ? "/cat.png" : "/sleepbunny.png";
 }
 
 function formatWeekly(ms) {
   const minutes = Math.round((Number(ms) || 0) / 60000);
-  if (minutes < 60) return `${minutes}m this week`;
+  if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest ? `${hours}h ${rest}m this week` : `${hours}h this week`;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function renderRows(friends) {
@@ -29,35 +37,46 @@ function renderRows(friends) {
   }
 
   root.innerHTML = `
-    <ol class="friends-leaderboard" aria-label="Friend activity">
+    <ul class="activity-list" aria-label="Friend activity">
       ${friends
         .map((friend) => {
-          const stats = friend.shareStats && friend.stats
-            ? `${friend.stats.todayFocusPercent ?? 0}% today · ${friend.stats.streakDays ?? 0} day streak · ${formatWeekly(friend.stats.weeklyFocusMs)}`
-            : "Stats hidden";
+          const hasStats = Boolean(friend.shareStats && friend.stats);
+          const status = friend.customStatus
+            ? `<p class="activity-status">${escapeHtml(friend.customStatus)}</p>`
+            : `<p class="activity-status is-muted">No status set</p>`;
           const listening =
             friend.shareListening && friend.listening?.isPlaying
               ? `Listening to ${friend.listening.trackName} — ${friend.listening.artistName}`
               : friend.shareListening
                 ? "Not playing anything right now"
                 : "Listening hidden";
-          const status = friend.customStatus
-            ? `<p class="friends-row-meta">${friend.customStatus}</p>`
-            : "";
+
+          const statsHtml = hasStats
+            ? `
+              <div class="activity-stat-chips" aria-label="Focus stats">
+                <span class="activity-chip"><strong>${friend.stats.todayFocusPercent ?? 0}%</strong> today</span>
+                <span class="activity-chip"><strong>${friend.stats.streakDays ?? 0}</strong> day streak</span>
+                <span class="activity-chip"><strong>${formatWeekly(friend.stats.weeklyFocusMs)}</strong> this week</span>
+              </div>
+            `
+            : `<p class="activity-listening is-muted">Stats hidden</p>`;
+
           return `
-            <li class="friends-row">
-              <img class="friends-avatar" src="${avatarSrc(friend.characterId)}" alt="" />
-              <div class="friends-row-main">
-                <p class="friends-username">${friend.username}</p>
-                ${status}
-                <p class="friends-row-meta">${stats}</p>
-                <p class="friends-row-meta">${listening}</p>
+            <li class="activity-card">
+              <img class="activity-avatar" src="${avatarSrc(friend.characterId)}" alt="" />
+              <div class="activity-body">
+                <div class="activity-heading">
+                  <p class="activity-username">${escapeHtml(friend.username)}</p>
+                  ${status}
+                </div>
+                ${statsHtml}
+                <p class="activity-listening">${escapeHtml(listening)}</p>
               </div>
             </li>
           `;
         })
         .join("")}
-    </ol>
+    </ul>
   `;
 }
 

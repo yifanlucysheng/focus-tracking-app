@@ -14,6 +14,7 @@
  * @property {boolean} completed
  * @property {string} [task]
  * @property {number} [onTaskRatio] - 0–1
+ * @property {number} [characterHealth] - staged companion health 0–100 at session end
  * @property {number} [longestLockInMs] - longest uninterrupted on-task stretch
  * @property {Record<string, number>} [distractionDomains] - domain → hit count
  * @property {Record<string, number>} [productiveDomains] - on-task domain → hit/time weight
@@ -24,7 +25,11 @@
  *
  * @typedef {Object} ProfileStore
  * @property {FocusSession[]} sessions
- * @property {number} xp - lifetime focused XP
+ * @property {number} [level] - current Focus Level
+ * @property {number} xp - XP toward the next level (not lifetime)
+ * @property {'progress'} [xpModel] - set after migrating off legacy lifetime XP
+ * @property {number} [focusStreak] - consecutive calendar days with ≥1 completed session
+ * @property {string|null} [lastCompletedFocusDate] - local YYYY-MM-DD of last completed session
  * @property {number} updatedAt - epoch ms
  */
 
@@ -33,16 +38,18 @@
  *
  * @typedef {Object} ProfileStatsView
  * @property {boolean} hasSessions
- * @property {number} characterHealth - 0–100
+ * @property {number} characterHealth - 0–100 (x/100; −1 HP per 1% off-task in the current/latest session)
  * @property {string} characterHealthLabel
- * @property {number} focusStreakDays
+ * @property {boolean} [liveSessionActive] - true while a focus session is running and syncing health live
+ * @property {number} focusStreakDays - Focus Streak (consecutive calendar days)
+ * @property {string|null} [lastCompletedFocusDate]
  * @property {number} longestSessionMs
  * @property {string} longestSessionLabel
  * @property {number} sessionsCompleted
  * @property {string|null} topDistraction
  * @property {string|null} topProductiveSite
  * @property {number} level
- * @property {number} xp
+ * @property {number} xp - XP toward next level (same as xpIntoLevel)
  * @property {number} xpIntoLevel
  * @property {number} xpForNextLevel
  * @property {number} xpProgress - 0–1 toward next level

@@ -124,13 +124,30 @@ function getEntryStatus(entry) {
   return null;
 }
 
-function setCharacterMood(status) {
-  const isOnTask = status !== "distracted";
+function applyBuddyVisual(visual) {
+  if (!characterImg || !visual) return;
+  const mood = visual.mood === "distracted" ? "distracted" : "on-task";
+  const isOnTask = mood !== "distracted";
   characterImg.classList.remove("on-task", "distracted");
-  characterImg.classList.add(isOnTask ? "on-task" : "distracted");
+  characterImg.classList.toggle("on-task", isOnTask);
+  characterImg.classList.toggle("distracted", !isOnTask);
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
   characterImg.alt = isOnTask ? "on-task" : "distracted";
-  characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
+  if (visual.buddyFile) characterImg.src = visual.buddyFile;
+}
+
+function refreshBuddyVisual() {
+  sendMessage("GET_BUDDY_VISUAL", {}, (visual) => {
+    if (visual) applyBuddyVisual(visual);
+  });
+}
+
+function setCharacterMood(status) {
+  applyBuddyVisual({
+    mood: status === "distracted" ? "distracted" : "on-task",
+    buddyFile: status === "distracted" ? "angrybunny.png" : "sleepbunny.png",
+  });
+  refreshBuddyVisual();
 }
 
 function requestFocusLog(callback) {
@@ -157,9 +174,7 @@ function applyStoredMood(status) {
 }
 
 function pollLatestFocusStatus() {
-  chrome.storage.local.get("characterMood").then((result) => {
-    applyStoredMood(result.characterMood);
-  });
+  refreshBuddyVisual();
 }
 
 function showSummary() {

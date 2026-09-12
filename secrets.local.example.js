@@ -1,6 +1,16 @@
-// Copy this file to secrets.local.js and paste your Gemini API key.
-// secrets.local.js is gitignored and never shown in the popup.
+// Copy this file to secrets.local.js (gitignored).
+// Gemini (optional):
 self.GEMINI_API_KEY = "YOUR_GEMINI_API_KEY";
 
-// Account / Spotify keys live in web/firebase-config.js (copy from
-// web/firebase-config.example.js). Deploy firestore.rules with the Firebase CLI.
+// Firebase — use the same web app keys as web/firebase-config.js
+self.FIREBASE_CONFIG = {
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
+};
+
+// Account / Spotify keys can also live in web/firebase-config.js.
+// Deploy firestore.rules with the Firebase CLI or Console.

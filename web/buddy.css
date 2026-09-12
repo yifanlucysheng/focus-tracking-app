@@ -1,6 +1,6 @@
 @font-face {
   font-family: "PP Mondwest";
-  src: url("../assets/fonts/PPMondwest-Regular.otf") format("opentype");
+  src: url("/fonts/PPMondwest-Regular.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: "LXGW Marker Gothic";
-  src: url("../assets/fonts/LXGWMarkerGothic.ttf") format("truetype");
+  src: url("/fonts/LXGWMarkerGothic.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -59,10 +59,45 @@ body {
   margin: -40px calc(50% - 50vw) 0;
   padding: 24px max(48px, calc((100vw - 1100px) / 2 + 48px)) 72px;
   background-color: #faf8f2;
-  background-image: url("../assets/star-bg.png");
+  background-image: url("/star-bg.png");
   background-repeat: repeat;
   background-size: 420px auto;
   background-position: top center;
+}
+
+/* Home: fill the viewport with stars and frame with cream bars */
+body:has(.intro-section) {
+  background-color: #faf8f2;
+  background-image: url("/star-bg.png");
+  background-repeat: repeat;
+  background-size: 420px auto;
+  background-position: top center;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+body:has(.intro-section) .page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  padding: 40px 0 0;
+  margin: 0;
+}
+
+body:has(.intro-section) .intro-section {
+  flex: 1;
+  margin: -40px 0 0;
+  min-height: calc(100vh - 44px);
+  padding-bottom: 80px;
+}
+
+.bottom-bar {
+  height: 22px;
+  background: var(--cream);
+  flex-shrink: 0;
 }
 
 .home-nav {
@@ -116,7 +151,7 @@ body {
 }
 
 .page-inner {
-  padding-top: 24px;
+  padding-top: 0;
 }
 
 .subpage-bar {
@@ -125,7 +160,13 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 8px;
+  margin: 0 calc(50% - 50vw) 0;
+  padding: 24px max(48px, calc((100vw - 1100px) / 2 + 48px)) 20px;
+  background-color: #faf8f2;
+  background-image: url("/star-bg.png");
+  background-repeat: repeat;
+  background-size: 420px auto;
+  background-position: top center;
 }
 
 .subpage-home {
@@ -352,6 +393,12 @@ body {
 }
 
 .section-divider:first-child {
+  margin-top: 0;
+}
+
+/* Flush the purple page title band against the starred subpage header */
+.page-inner .section-divider:first-child,
+.page-inner [data-section-divider].section-divider {
   margin-top: 0;
 }
 
@@ -594,6 +641,16 @@ body {
     background-size: 360px auto;
   }
 
+  body:has(.intro-section) .page {
+    padding-top: 28px;
+  }
+
+  body:has(.intro-section) .intro-section {
+    margin-top: -28px;
+    min-height: calc(100vh - 44px);
+    padding-bottom: 64px;
+  }
+
   .page-nav {
     justify-content: center;
     margin-top: 24px;
@@ -607,6 +664,7 @@ body {
   .subpage-bar {
     flex-direction: column;
     align-items: flex-start;
+    padding: 20px max(24px, calc((100vw - 1100px) / 2 + 24px)) 16px;
   }
 
   .subpage-bar .page-nav {
@@ -672,12 +730,20 @@ body {
 
 .profile-hero-card,
 .profile-flame-card,
+.profile-streak-card,
 .profile-level-card,
 .profile-stat-tile {
-  background: rgba(247, 239, 216, 0.45);
   border: 1px solid rgba(100, 108, 166, 0.22);
   border-radius: 24px;
   padding: 22px 24px;
+}
+
+.profile-card-tone-a {
+  background: #e4e7f9;
+}
+
+.profile-card-tone-b {
+  background: var(--cream);
 }
 
 .profile-hero-card {
@@ -779,6 +845,29 @@ body {
 
 .profile-flame-card.is-empty {
   background: rgba(247, 239, 216, 0.45);
+}
+
+.profile-streak-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 150px;
+}
+
+.profile-streak-card .profile-stat-label {
+  margin: 0 0 8px;
+}
+
+.profile-streak-card.is-empty {
+  opacity: 0.95;
+}
+
+.profile-streak-text {
+  margin: 0;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: clamp(28px, 4vw, 40px);
+  color: var(--focus);
+  line-height: 1.15;
 }
 
 .profile-flame-text {
@@ -897,6 +986,12 @@ body {
   gap: 20px;
 }
 
+.friends-upper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .friends-add-card,
 .friends-requests-card,
 .friends-summary-card {
@@ -904,6 +999,71 @@ body {
   border: 1px solid rgba(100, 108, 166, 0.22);
   border-radius: 24px;
   padding: 22px 24px;
+}
+
+.friends-add-status {
+  margin: 12px 0 0;
+  min-height: 1.2em;
+  color: var(--buddy);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.friends-add-status.is-error {
+  color: #9b3b3b;
+}
+
+.friends-add-status.is-success {
+  color: #2f6b45;
+}
+
+.friends-add-status.is-loading {
+  color: var(--buddy);
+}
+
+.friends-requests-empty {
+  margin: 8px 0 0;
+  color: var(--buddy);
+  font-size: 15px;
+}
+
+.friends-requests-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.friends-request-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.friends-request-username {
+  margin: 0;
+  color: var(--focus);
+  font-size: 16px;
+}
+
+.friends-request-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.friends-decline-btn {
+  background: transparent;
+  border: 1px solid rgba(100, 108, 166, 0.35);
+  color: var(--buddy);
+}
+
+.friends-decline-btn:hover:not(:disabled) {
+  background: rgba(100, 108, 166, 0.08);
 }
 
 .friends-add-row {
@@ -929,6 +1089,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  margin-top: 12px;
 }
 
 .friends-summary-value {
@@ -937,6 +1098,24 @@ body {
   font-size: clamp(22px, 3vw, 30px);
   color: var(--focus);
   line-height: 1.2;
+}
+
+.friends-leaderboard-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 36px;
+  padding-top: 36px;
+  border-top: 2px solid rgba(100, 108, 166, 0.28);
+}
+
+.friends-leaderboard-heading {
+  margin: 0 0 12px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 400;
+  color: var(--focus);
+  line-height: 1.1;
 }
 
 .friends-compare-msg {
@@ -1058,15 +1237,119 @@ body {
   font-size: 14px;
 }
 
-.friend-request-row {
+/* —— Friend activity cards —— */
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.activity-card {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 20px;
+  align-items: center;
+  width: 100%;
+  padding: 22px 24px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(228, 231, 249, 0.75), rgba(247, 239, 216, 0.55));
+  border: 1px solid rgba(100, 108, 166, 0.2);
+}
+
+.activity-avatar {
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(42, 24, 107, 0.1));
+}
+
+.activity-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.activity-heading {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 8px;
-  color: var(--ink);
-  font-size: 16px;
+  align-items: baseline;
+  gap: 10px 14px;
 }
+
+.activity-username {
+  margin: 0;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: clamp(26px, 3vw, 34px);
+  color: var(--focus);
+  line-height: 1.1;
+}
+
+.activity-status {
+  margin: 0;
+  color: var(--buddy);
+  font-size: 18px;
+}
+
+.activity-status.is-muted,
+.activity-listening.is-muted {
+  opacity: 0.75;
+}
+
+.activity-stat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.activity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(100, 108, 166, 0.18);
+  color: var(--buddy);
+  font-size: 15px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.activity-chip strong {
+  color: var(--focus);
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.activity-listening {
+  margin: 0;
+  color: var(--buddy);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .activity-card {
+    grid-template-columns: 64px 1fr;
+    gap: 14px;
+    padding: 18px;
+  }
+
+  .activity-avatar {
+    width: 64px;
+    height: 64px;
+  }
+
+  .activity-username {
+    font-size: 24px;
+  }
+}
+
 
 @media (max-width: 900px) {
   .friends-summary-grid {
@@ -1095,82 +1378,40 @@ body {
 
 .settings-grid {
   display: grid;
-  gap: 18px;
+  gap: 0;
+  margin-top: 12px;
 }
 
-.sites-settings {
-  margin-top: 24px;
-}
-
-#folders-panel {
-  margin: 18px 0;
-}
-
-.folder-buttons,
-.folder-checks {
+.settings-grid .dash-panel {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 10px 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 28px 0 32px;
+  border-top: 1px solid rgba(100, 108, 166, 0.18);
 }
 
-.folder-chip {
-  display: inline-flex;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--cream);
+.settings-grid .dash-panel:first-child {
+  border-top: none;
+  padding-top: 8px;
 }
 
-.folder-open-btn,
-.folder-delete-btn {
-  appearance: none;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
+.settings-grid .dash-panel:last-child {
+  padding-bottom: 8px;
 }
 
-.folder-open-btn {
-  padding: 8px 14px;
-  background: var(--cream);
-  color: var(--focus);
-}
-
-.folder-delete-btn {
-  padding: 8px 10px;
-  background: transparent;
-  color: var(--buddy);
-}
-
-.folder-add-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin: 8px 0 16px;
-}
-
-.folder-add-row .field-input {
-  flex: 1;
-  min-width: 180px;
+.settings-grid .field-label {
   margin: 0;
-}
-
-.folder-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink);
 }
 
 .settings-grid .field-input,
 .signed-out-panel .field-input,
 #signed-out-panel .field-input {
-  margin: 8px 0;
+  margin: 0;
 }
 
 .settings-username {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 28px;
   font-family: "PP Mondwest", "Courier New", monospace;
 }
@@ -1179,8 +1420,16 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 10px 0;
+  margin: 0;
   font-size: 18px;
+}
+
+.settings-grid .folders-hint {
+  margin: 4px 0 0;
+}
+
+.settings-grid .btn {
+  margin-top: 4px;
 }
 
 .stats-history {

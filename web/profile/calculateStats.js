@@ -2,37 +2,35 @@
 /** @typedef {import('./profileTypes.js').ProfileStore} ProfileStore */
 /** @typedef {import('./profileTypes.js').ProfileStatsView} ProfileStatsView */
 
-/** XP earned per focused minute — easy to tune later. */
-export const XP_PER_FOCUSED_MINUTE = 1;
+import {
+  calculateFocusStreak,
+  latestCompletedFocusDate,
+} from "./focusStreak.js";
+import {
+  XP_PER_FOCUSED_MINUTE,
+  XP_SESSION_COMPLETION_BONUS,
+  applyXp,
+  calculateSessionXp,
+  deriveLevelFromXp,
+  normalizeProgressXp,
+  resolveProgressXp,
+  resolveTotalXp,
+  xpRequiredForLevel,
+  xpToNextLevel,
+} from "./xp.js";
 
-/** XP required for level n → n+1 grows gently. */
-export function xpRequiredForLevel(level) {
-  const safeLevel = Math.max(1, Math.floor(level));
-  return 100 + (safeLevel - 1) * 50;
-}
-
-/**
- * @param {number} totalXp
- * @returns {{ level: number, xpIntoLevel: number, xpForNextLevel: number, xpProgress: number }}
- */
-export function deriveLevelFromXp(totalXp) {
-  let xp = Math.max(0, Math.floor(totalXp));
-  let level = 1;
-
-  while (xp >= xpRequiredForLevel(level)) {
-    xp -= xpRequiredForLevel(level);
-    level += 1;
-    if (level > 999) break;
-  }
-
-  const xpForNextLevel = xpRequiredForLevel(level);
-  return {
-    level,
-    xpIntoLevel: xp,
-    xpForNextLevel,
-    xpProgress: xpForNextLevel === 0 ? 0 : xp / xpForNextLevel,
-  };
-}
+export {
+  XP_PER_FOCUSED_MINUTE,
+  XP_SESSION_COMPLETION_BONUS,
+  applyXp,
+  calculateSessionXp,
+  deriveLevelFromXp,
+  normalizeProgressXp,
+  resolveProgressXp,
+  resolveTotalXp,
+  xpRequiredForLevel,
+  xpToNextLevel,
+};
 
 /**
  * @param {number} ms
@@ -53,55 +51,8 @@ export function formatDurationShort(ms) {
   return `${Math.max(1, seconds)}s`;
 }
 
-/**
- * Local calendar day key YYYY-MM-DD.
- * @param {number} epochMs
- * @returns {string}
- */
-function dayKey(epochMs) {
-  const d = new Date(epochMs);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/**
- * Consecutive days ending today (or yesterday if no session today yet)
- * with ≥1 completed session.
- *
- * @param {FocusSession[]} sessions
- * @param {number} [now]
- * @returns {number}
- */
-export function calculateFocusStreakDays(sessions, now = Date.now()) {
-  const completedDays = new Set(
-    sessions
-      .filter((s) => s.completed && typeof s.endedAt === "number")
-      .map((s) => dayKey(s.endedAt))
-  );
-
-  if (completedDays.size === 0) return 0;
-
-  let cursor = new Date(now);
-  let key = dayKey(cursor.getTime());
-
-  // If nothing today, start streak from yesterday.
-  if (!completedDays.has(key)) {
-    cursor.setDate(cursor.getDate() - 1);
-    key = dayKey(cursor.getTime());
-    if (!completedDays.has(key)) return 0;
-  }
-
-  let streak = 0;
-  while (completedDays.has(key)) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-    key = dayKey(cursor.getTime());
-  }
-
-  return streak;
-}
+/** @deprecated Prefer calculateFocusStreak from focusStreak.js */
+export { calculateFocusStreak as calculateFocusStreakDays } from "./focusStreak.js";
 
 /**
  * @param {FocusSession[]} sessions
@@ -115,13 +66,6 @@ export function calculateLongestSessionMs(sessions) {
   }, 0);
 }
 
-function sessionDomainBag(session, field) {
-  const snake = field === "distractionDomains" ? "distraction_domains" : "productive_domains";
-  const bag = session?.[field] || session?.[snake] || {};
-  if (bag && typeof bag === "object" && !Array.isArray(bag)) return bag;
-  return {};
-}
-
 /**
  * @param {FocusSession[]} sessions
  * @param {'distractionDomains' | 'productiveDomains'} field
@@ -132,16 +76,10 @@ function calculateTopDomain(sessions, field) {
   const totals = {};
 
   for (const session of sessions) {
-    const domains = sessionDomainBag(session, field);
+    const domains = session[field] || {};
     for (const [domain, count] of Object.entries(domains)) {
       if (!domain) continue;
       totals[domain] = (totals[domain] || 0) + (Number(count) || 0);
-    }
-    const fallbackKey = field === "distractionDomains" ? "topDistraction" : "topProductiveSite";
-    const fallbackSnake = field === "distractionDomains" ? "top_distraction" : "top_productive_site";
-    const fallback = session?.[fallbackKey] || session?.[fallbackSnake];
-    if (typeof fallback === "string" && fallback && !Object.keys(domains).length) {
-      totals[fallback] = (totals[fallback] || 0) + 1;
     }
   }
 
@@ -174,23 +112,38 @@ export function calculateTopProductiveSite(sessions) {
 }
 
 /**
- * Simple health: average on-task ratio of last few completed sessions.
- * Defaults to a calm resting value when empty (UI will still show empty copy).
+ * Session health: start at 100; every 1% of time spent off-task = −1 HP.
+ *
+ * @param {number} onTaskRatio 0–1
+ * @returns {number} 0–100
+ */
+export function characterHealthFromOnTaskRatio(onTaskRatio) {
+  const ratio = Math.min(1, Math.max(0, Number(onTaskRatio) || 0));
+  const offTaskPercent = Math.round((1 - ratio) * 100);
+  return Math.max(0, Math.min(100, 100 - offTaskPercent));
+}
+
+/**
+ * Prefer the staged health saved with the session; fall back to legacy ratio mapping.
  *
  * @param {FocusSession[]} sessions
  * @returns {number} 0–100
  */
 export function calculateCharacterHealth(sessions) {
-  const recent = sessions.filter((s) => s.completed).slice(-5);
-  if (recent.length === 0) return 0;
+  const completed = sessions.filter((s) => s.completed);
+  if (completed.length === 0) return 95;
 
-  const ratios = recent.map((s) => {
-    if (typeof s.onTaskRatio === "number") return Math.min(1, Math.max(0, s.onTaskRatio));
-    return 0.5;
-  });
-
-  const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-  return Math.round(avg * 100);
+  const last = completed[completed.length - 1];
+  if (typeof last.characterHealth === "number" && Number.isFinite(last.characterHealth)) {
+    return Math.max(0, Math.min(100, Math.floor(last.characterHealth)));
+  }
+  if (typeof last.onTaskRatio === "number") {
+    return characterHealthFromOnTaskRatio(last.onTaskRatio);
+  }
+  if (typeof last.onTaskPercent === "number") {
+    return characterHealthFromOnTaskRatio(last.onTaskPercent / 100);
+  }
+  return 95;
 }
 
 /**
@@ -206,20 +159,24 @@ export function characterHealthLabel(health) {
 }
 
 /**
- * Prefer stored XP; if zero, derive a baseline from completed focused minutes.
+ * Resolve stored level + progress XP (migrates legacy lifetime when needed).
  *
  * @param {ProfileStore} store
- * @returns {number}
+ * @returns {{ level: number, xp: number, xpForNextLevel: number, xpProgress: number }}
  */
-export function resolveTotalXp(store) {
-  if (store.xp > 0) return store.xp;
-
-  const focusedMs = store.sessions
-    .filter((s) => s.completed)
-    .reduce((sum, s) => sum + (s.durationMs || 0), 0);
-
-  const focusedMinutes = Math.floor(focusedMs / 60000);
-  return focusedMinutes * XP_PER_FOCUSED_MINUTE;
+export function resolveLevelProgress(store) {
+  const normalized = normalizeProgressXp(store.level, store.xp, {
+    xpModel: store.xpModel,
+  });
+  return {
+    level: normalized.level,
+    xp: normalized.xp,
+    xpForNextLevel: normalized.xpForNextLevel,
+    xpProgress:
+      normalized.xpForNextLevel === 0
+        ? 0
+        : normalized.xp / normalized.xpForNextLevel,
+  };
 }
 
 /**
@@ -234,22 +191,25 @@ export function calculateProfileStats(store, now = Date.now()) {
 
   const health = calculateCharacterHealth(sessions);
   const longestSessionMs = calculateLongestSessionMs(sessions);
-  const totalXp = resolveTotalXp(store);
-  const levelInfo = deriveLevelFromXp(totalXp);
+  const levelInfo = resolveLevelProgress(store);
+  const focusStreak = calculateFocusStreak(sessions, now);
+  const lastDay = latestCompletedFocusDate(sessions);
 
   return {
     hasSessions,
     characterHealth: health,
     characterHealthLabel: characterHealthLabel(health),
-    focusStreakDays: calculateFocusStreakDays(sessions, now),
+    liveSessionActive: false,
+    focusStreakDays: focusStreak,
+    lastCompletedFocusDate: lastDay,
     longestSessionMs,
     longestSessionLabel: formatDurationShort(longestSessionMs),
     sessionsCompleted: completed.length,
     topDistraction: calculateTopDistraction(sessions),
     topProductiveSite: calculateTopProductiveSite(sessions),
     level: levelInfo.level,
-    xp: totalXp,
-    xpIntoLevel: levelInfo.xpIntoLevel,
+    xp: levelInfo.xp,
+    xpIntoLevel: levelInfo.xp,
     xpForNextLevel: levelInfo.xpForNextLevel,
     xpProgress: levelInfo.xpProgress,
   };

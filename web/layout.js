@@ -1,5 +1,6 @@
 const PAGES = [
   { href: "index.html", id: "home", label: "Home" },
+  { href: "session.html", id: "session", label: "Focus session" },
   { href: "stats.html", id: "stats", label: "Your stats" },
   { href: "friends.html", id: "friends", label: "Friends" },
   { href: "activity.html", id: "activity", label: "Activity" },
