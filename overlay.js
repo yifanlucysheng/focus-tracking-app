@@ -1,6 +1,6 @@
 (() => {
-  // Bump version so re-inject replaces older overlay copies that crashed on chrome.storage.
-  const OVERLAY_VERSION = 3;
+  // Bump so re-inject replaces older overlay copies that crashed on chrome.storage.
+  const OVERLAY_VERSION = 4;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
@@ -88,9 +88,10 @@
 
   function showOverlay(animate, mood) {
     const host = ensureHost();
-    const img = host.shadowRoot.querySelector("img");
-    img.src = bunnyUrl(mood || "on-task");
+    const img = host.shadowRoot?.querySelector("img");
+    if (!img) return;
 
+    img.src = bunnyUrl(mood || "on-task");
     img.classList.remove("fall", "rest");
     if (animate) {
       void img.offsetWidth;
@@ -112,20 +113,21 @@
     document.getElementById(HOST_ID)?.remove();
   }
 
-  // Do not use chrome.storage here — it is undefined in some page contexts and
-  // previously crashed with "Cannot read properties of undefined (reading 'onChanged')".
-  // Mood / show / hide are driven only by background messages.
+  // Never touch chrome.storage here — it is undefined in some page worlds and
+  // crashed with "Cannot read properties of undefined (reading 'onChanged')".
   try {
     if (typeof chrome !== "undefined" && chrome.runtime?.onMessage?.addListener) {
       chrome.runtime.onMessage.addListener((message) => {
-        if (message?.type === "OVERLAY_FALL") {
+        if (!message || typeof message !== "object") return;
+        if (message.type === "OVERLAY_FALL") {
           showOverlay(true, message.mood);
-        }
-        if (message?.type === "OVERLAY_SHOW") {
+        } else if (message.type === "OVERLAY_SHOW") {
           showOverlay(false, message.mood);
+        } else if (message.type === "OVERLAY_HIDE") {
+          hideOverlay();
+        } else if (message.type === "OVERLAY_MOOD") {
+          setMood(message.mood);
         }
-        if (message?.type === "OVERLAY_HIDE") hideOverlay();
-        if (message?.type === "OVERLAY_MOOD") setMood(message.mood);
       });
     }
   } catch {

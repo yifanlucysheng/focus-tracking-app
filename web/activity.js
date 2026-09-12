@@ -63,7 +63,7 @@ function renderRows(friends) {
 
 async function refresh() {
   if (!isCloudConfigured()) {
-    if (banner) banner.textContent = "Add VITE_SUPABASE_* keys in .env.local to load friend activity.";
+    if (banner) banner.textContent = "Add Firebase keys in web/firebase-config.js to load friend activity.";
     return;
   }
   const me = await loadUserDoc();

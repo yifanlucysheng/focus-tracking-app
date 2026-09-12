@@ -3,13 +3,15 @@ import { mountSectionDivider, mountSiteNav } from "./layout.js";
 import { bootCloudSync, formatSessionClock } from "./session-sync.js";
 import { calculateProfileStats } from "./profile/calculateStats.js";
 import { loadProfileStoreAsync } from "./profile/profileStorage.js";
-import {
-  loadPublicProfileFromSupabase,
-  mergePublicProfileIntoStats,
-} from "./profile/profileService.js";
+import { mergePublicProfileIntoStats } from "./profile/profileService.js";
 import { renderProfileStats } from "./profile/renderProfileStats.js";
-import { getCachedProfile } from "./auth/authService.js";
-import { isCloudConfigured, listenAuth, loadMySessions } from "./cloud.js";
+import {
+  isCloudConfigured,
+  listenAuth,
+  loadMySessions,
+  loadOwnPublicStats,
+  loadUserDoc,
+} from "./cloud.js";
 
 mountSiteNav("stats");
 mountSectionDivider("Your stats");
@@ -40,20 +42,44 @@ function renderHistory(sessions) {
               })
               .join("")}
           </ol>`
-        : `<p class="folders-hint">Finished sessions from this browser show up here. XP, level, streak, and summary cards sync from your account (including the extension).</p>`
+        : `<p class="folders-hint">Finished sessions show up here and sync to Firebase when you are signed in.</p>`
     }
   `;
   profileRoot?.after(wrap);
 }
 
+/**
+ * Map Firestore public/stats into the shape mergePublicProfileIntoStats expects.
+ * @param {object|null} publicStats
+ * @param {object|null} userDoc
+ */
+function asProfileRow(publicStats, userDoc) {
+  if (!publicStats && !userDoc) return null;
+  return {
+    id: userDoc?.id || "firebase",
+    username: userDoc?.username || "You",
+    focus_level: publicStats?.level ?? 1,
+    xp: publicStats?.xp ?? 0,
+    focus_streak: publicStats?.streakDays ?? 0,
+    longest_session_ms: publicStats?.longestSessionMs ?? 0,
+    sessions_completed: publicStats?.sessionsCompleted ?? 0,
+    top_distraction: publicStats?.topDistraction ?? null,
+    top_productive_site: publicStats?.topProductiveSite ?? null,
+    character_health: publicStats?.characterHealth ?? 0,
+    created_at: "",
+  };
+}
+
 async function refresh() {
   const localStore = await loadProfileStoreAsync();
   let sessions = localStore.sessions || [];
-  try {
-    const cloudSessions = await loadMySessions();
-    if (cloudSessions.length) sessions = cloudSessions;
-  } catch {
-    // Keep local copy if signed out or offline.
+  if (isCloudConfigured()) {
+    try {
+      const cloudSessions = await loadMySessions();
+      if (cloudSessions.length) sessions = cloudSessions;
+    } catch {
+      // Keep local copy if signed out or offline.
+    }
   }
 
   const localStats = calculateProfileStats({
@@ -61,17 +87,22 @@ async function refresh() {
     sessions,
   });
 
-  let profile = getCachedProfile();
+  let publicStats = null;
+  let userDoc = null;
   try {
-    profile = (await loadPublicProfileFromSupabase()) || profile;
+    publicStats = await loadOwnPublicStats();
+    userDoc = await loadUserDoc();
   } catch {
-    // Use cached / local if Supabase read fails.
+    // Use local stats only.
   }
 
-  const stats = mergePublicProfileIntoStats(localStats, profile);
+  const stats = mergePublicProfileIntoStats(
+    localStats,
+    asProfileRow(publicStats, userDoc)
+  );
   renderProfileStats(profileRoot, stats, {
     characterId: loadSelectedCharacterId(),
-    username: profile?.username || "You",
+    username: userDoc?.username || "You",
   });
   renderHistory(sessions);
 }

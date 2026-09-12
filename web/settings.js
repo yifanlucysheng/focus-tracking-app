@@ -39,9 +39,7 @@ function setSignedIn(on) {
 async function refreshSpotifyLabel() {
   const tokens = await loadSpotifyTokens().catch(() => null);
   if (spotifyStatus) {
-    spotifyStatus.textContent = tokens?.accessToken
-      ? "Spotify connected"
-      : "Not connected (optional — not required for XP sync)";
+    spotifyStatus.textContent = tokens?.accessToken ? "Spotify connected" : "Not connected";
   }
 }
 
@@ -74,7 +72,6 @@ document.getElementById("signup-btn")?.addEventListener("click", async () => {
       password: document.getElementById("signup-password")?.value,
     });
     setBanner("Account created.");
-    await renderAccount();
   } catch (error) {
     setBanner(error.message || "Could not create account.");
   }
@@ -87,18 +84,12 @@ document.getElementById("signin-btn")?.addEventListener("click", async () => {
       document.getElementById("signin-password")?.value
     );
     setBanner("");
-    await renderAccount();
   } catch (error) {
     setBanner(error.message || "Could not sign in.");
   }
 });
 
-document.getElementById("signout-btn")?.addEventListener("click", async () => {
-  await signOutUser();
-  setSignedIn(false);
-  setBanner("");
-});
-
+document.getElementById("signout-btn")?.addEventListener("click", () => signOutUser());
 document.getElementById("save-status-btn")?.addEventListener("click", async () => {
   try {
     await updateUserDoc({ customStatus: statusInput?.value?.trim() || "" });
@@ -114,7 +105,7 @@ async function persistPrivacy() {
       shareStats: Boolean(shareStats?.checked),
       shareListening: Boolean(shareListening?.checked),
     });
-    setBanner("Privacy updated (saved on this device for now).");
+    setBanner("Privacy updated.");
   } catch (error) {
     setBanner(error.message);
   }
@@ -126,13 +117,13 @@ shareListening?.addEventListener("change", persistPrivacy);
 document.getElementById("spotify-connect-btn")?.addEventListener("click", async () => {
   try {
     if (!isSpotifyConfigured()) {
-      setBanner("Spotify is not configured in this build.");
+      setBanner("Add your Spotify client ID to web/firebase-config.js");
       return;
     }
     await connectSpotify();
     await publishNowPlaying();
     await refreshSpotifyLabel();
-    setBanner("Spotify connected.");
+    setBanner("Spotify connected. Only friends can see it if listening sharing is on.");
   } catch (error) {
     setBanner(error.message);
   }
@@ -140,6 +131,11 @@ document.getElementById("spotify-connect-btn")?.addEventListener("click", async 
 
 document.getElementById("spotify-disconnect-btn")?.addEventListener("click", async () => {
   await clearSpotifyTokens();
+  try {
+    await chrome.storage.local.remove("spotifyTokens");
+  } catch {
+    // Not running inside the extension.
+  }
   await refreshSpotifyLabel();
   setBanner("Spotify disconnected.");
 });

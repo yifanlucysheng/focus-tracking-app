@@ -44,16 +44,30 @@ function readSecretString(value) {
 
 /**
  * Placeholder / empty credentials are treated as unconfigured.
- * @param {string} url
- * @param {string} key
+ * @param {Record<string, string>} config
  * @returns {boolean}
  */
-function hasRealSupabaseCredentials(url, key) {
-  if (!url || !key) return false;
-  if (url.includes("YOUR_PROJECT_REF")) return false;
-  if (key.includes("YOUR_SUPABASE_PUBLISHABLE_KEY")) return false;
-  if (key.includes("service_role")) return false;
+function hasRealFirebaseCredentials(config) {
+  const apiKey = readSecretString(config?.apiKey);
+  const projectId = readSecretString(config?.projectId);
+  if (!apiKey || !projectId) return false;
+  if (apiKey.includes("YOUR_FIREBASE")) return false;
+  if (projectId.includes("YOUR_PROJECT")) return false;
   return true;
+}
+
+function readFirebaseConfigFromSecrets() {
+  if (globalThis.FIREBASE_CONFIG && typeof globalThis.FIREBASE_CONFIG === "object") {
+    return globalThis.FIREBASE_CONFIG;
+  }
+  return {
+    apiKey: readSecretString(globalThis.FIREBASE_API_KEY),
+    authDomain: readSecretString(globalThis.FIREBASE_AUTH_DOMAIN),
+    projectId: readSecretString(globalThis.FIREBASE_PROJECT_ID),
+    storageBucket: readSecretString(globalThis.FIREBASE_STORAGE_BUCKET),
+    messagingSenderId: readSecretString(globalThis.FIREBASE_MESSAGING_SENDER_ID),
+    appId: readSecretString(globalThis.FIREBASE_APP_ID),
+  };
 }
 
 const AUTH_READY = (async () => {
@@ -61,14 +75,13 @@ const AUTH_READY = (async () => {
     return { configured: false, signedIn: false, user: null, profile: null };
   }
 
-  const url = readSecretString(globalThis.SUPABASE_URL);
-  const publishableKey = readSecretString(globalThis.SUPABASE_PUBLISHABLE_KEY);
+  const firebaseConfig = readFirebaseConfigFromSecrets();
 
-  if (!hasRealSupabaseCredentials(url, publishableKey)) {
+  if (!hasRealFirebaseCredentials(firebaseConfig)) {
     return {
       configured: false,
       configMessage:
-        "Connect FocusBuddy: open secrets.local.js in the extension root and paste your Supabase API URL into SUPABASE_URL and your publishable key into SUPABASE_PUBLISHABLE_KEY, then reload the extension.",
+        "Connect FocusBuddy: open secrets.local.js and paste the same Firebase web keys as web/firebase-config.js, then reload the extension.",
       signedIn: false,
       user: null,
       profile: null,
@@ -76,11 +89,7 @@ const AUTH_READY = (async () => {
   }
 
   try {
-    const state = await globalThis.FocusBuddyAuth.init({
-      url,
-      publishableKey,
-    });
-    // Retry any public stats that failed to sync earlier.
+    const state = await globalThis.FocusBuddyAuth.init(firebaseConfig);
     if (globalThis.FocusBuddyAuth.flushPendingPublicSync) {
       void globalThis.FocusBuddyAuth.flushPendingPublicSync();
     }
@@ -631,6 +640,20 @@ async function injectOverlay(tabId, animate) {
   try {
     const moodResult = await chrome.storage.local.get(MOOD_KEY);
     const mood = moodResult[MOOD_KEY] || "on-task";
+    // Clear any older overlay copy (including ones that crashed on chrome.storage)
+    // so the latest storage-free overlay.js always installs.
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        try {
+          window.__focusBuddyOverlayVersion = 0;
+          window.__focusBuddyOverlayInit = false;
+          document.getElementById("focus-buddy-overlay-host")?.remove();
+        } catch {
+          // Page may deny access in rare cases.
+        }
+      },
+    });
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["overlay.js"],

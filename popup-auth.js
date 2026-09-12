@@ -43,7 +43,7 @@
     if (!state?.configured) {
       statusEl.textContent =
         state?.configMessage ||
-        "Connect FocusBuddy: add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to secrets.local.js.";
+        "Connect FocusBuddy: add Firebase keys to secrets.local.js (same as web/firebase-config.js).";
       statusEl.classList.add("is-warn");
       formEl.hidden = true;
       signedInEl.hidden = true;

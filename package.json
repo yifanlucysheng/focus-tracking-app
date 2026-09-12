@@ -10,10 +10,12 @@
     "preview": "vite preview",
     "build:extension-auth": "esbuild chrome-auth/entry.js --bundle --format=iife --outfile=vendor/focusbuddy-auth.iife.js --platform=browser",
     "build:extension-sw": "node scripts/build-service-worker.mjs",
-    "build:extension": "node scripts/package-extension.mjs"
+    "build:extension": "node scripts/package-extension.mjs",
+    "bundle:firebase": "esbuild web/firebase-sdk.js --bundle --format=esm --outfile=web/vendor/firebase.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4"
+    "@supabase/supabase-js": "^2.57.4",
+    "firebase": "^12.19.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

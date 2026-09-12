@@ -1,249 +1,230 @@
-/**
- * Website cloud adapter: Supabase (Iris) behind the multi-page UI API.
- * Extension sessions sync XP / level / streak / summary via profileService.
- */
+import { firebaseConfig } from "./firebase-config.js";
 import {
-  ensureProfileForUser,
-  getCachedProfile,
-  getSession,
-  loadCurrentProfile,
-  onAuthStateChange,
-  setCachedProfile,
-  signIn,
-  signOut,
-  signUp,
-} from "./auth/authService.js";
-import { getSupabaseConfigStatus } from "./auth/supabaseClient.js";
-import {
-  acceptFriendRequest as acceptFriendshipById,
-  getAcceptedFriends,
-  getActiveFriendshipWith,
-  getIncomingPendingRequests,
-  searchUserByUsername,
-  sendFriendRequest as sendFriendRequestById,
-} from "./friends/friendsService.js";
-import {
-  loadPublicProfileFromSupabase,
-  recordCompletedSession,
-} from "./profile/profileService.js";
-import { loadProfileStore } from "./profile/profileStorage.js";
+  applyXp,
+  calculateFocusStreakDays,
+  calculateProfileStats,
+  calculateSessionXp,
+  normalizeProgressXp,
+} from "./profile/calculateStats.js";
+import { publicSessionSummaryFromStats } from "./profile/sessionSummary.js";
 
-const PREFS_KEY = "focusBuddy.userPrefs";
-
-/** @type {string|null} */
-let cachedUid = null;
+let app = null;
+let auth = null;
+let db = null;
+let initPromise = null;
+let firestoreFns = null;
+let authFns = null;
 
 export function isCloudConfigured() {
-  return getSupabaseConfigStatus().ok;
+  return Boolean(
+    firebaseConfig?.apiKey &&
+      firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY" &&
+      firebaseConfig.projectId &&
+      firebaseConfig.projectId !== "YOUR_PROJECT_ID"
+  );
+}
+
+async function loadSdk() {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    if (!isCloudConfigured()) {
+      throw new Error("Add your Firebase keys to web/firebase-config.js");
+    }
+    const firebaseSdk = await import("./vendor/firebase.js");
+    app = firebaseSdk.initializeApp(firebaseConfig);
+    auth = firebaseSdk.getAuth(app);
+    db = firebaseSdk.getFirestore(app);
+    authFns = firebaseSdk;
+    firestoreFns = firebaseSdk;
+    return { app, auth, db };
+  })();
+  return initPromise;
+}
+
+export async function getCloud() {
+  return loadSdk();
 }
 
 export function currentUid() {
-  return cachedUid || getCachedProfile()?.id || null;
+  return auth?.currentUser?.uid ?? null;
 }
 
-/**
- * @param {(user: { uid: string } | null) => void | Promise<void>} callback
- */
 export async function listenAuth(callback) {
-  if (!isCloudConfigured()) {
-    await callback(null);
-    return () => {};
-  }
+  await loadSdk();
+  return authFns.onAuthStateChanged(auth, callback);
+}
 
-  const session = await getSession();
-  if (session?.user) {
-    cachedUid = session.user.id;
-    try {
-      await ensureProfileForUser(session.user);
-    } catch {
-      // Profile may still be missing until signup completes.
-    }
-    await callback({ uid: session.user.id });
-  } else {
-    cachedUid = null;
-    await callback(null);
-  }
+function usernameKey(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "")
+    .slice(0, 24);
+}
 
-  return onAuthStateChange(async (next) => {
-    if (!next?.user) {
-      cachedUid = null;
-      setCachedProfile(null);
-      await callback(null);
-      return;
-    }
-    cachedUid = next.user.id;
-    try {
-      await ensureProfileForUser(next.user);
-    } catch {
-      // Ignore ensure errors in listener.
-    }
-    await callback({ uid: next.user.id });
+export async function signUpWithEmail({ email, password, username }) {
+  await loadSdk();
+  const key = usernameKey(username);
+  if (key.length < 3) throw new Error("Username must be at least 3 letters or numbers.");
+
+  const { doc, getDoc, setDoc, serverTimestamp } = firestoreFns;
+  const nameRef = doc(db, "usernames", key);
+  const existing = await getDoc(nameRef);
+  if (existing.exists()) throw new Error("That username is taken.");
+
+  const cred = await authFns.createUserWithEmailAndPassword(auth, email, password);
+  const uid = cred.user.uid;
+  await setDoc(doc(db, "users", uid), {
+    username: key,
+    displayName: String(username).trim(),
+    characterId: "sleepbunny",
+    customStatus: "",
+    shareStats: false,
+    shareListening: false,
+    createdAt: serverTimestamp(),
   });
+  await setDoc(nameRef, { uid, username: key });
+  return cred.user;
 }
 
-/**
- * @param {{ email: string, password: string, username: string }} input
- */
-export async function signUpWithEmail(input) {
-  const result = await signUp(input);
-  if (result.session?.user) {
-    cachedUid = result.session.user.id;
-  }
-  if (result.needsEmailConfirmation) {
-    throw new Error("Check your email to confirm your account, then sign in.");
-  }
-  return result.user;
-}
-
-/**
- * @param {string} email
- * @param {string} password
- */
 export async function signInWithEmail(email, password) {
-  const result = await signIn({ email, password });
-  cachedUid = result.session.user.id;
-  return result.session.user;
+  await loadSdk();
+  const cred = await authFns.signInWithEmailAndPassword(auth, email, password);
+  return cred.user;
 }
 
 export async function signOutUser() {
-  cachedUid = null;
-  await signOut();
+  await loadSdk();
+  await authFns.signOut(auth);
 }
 
-function loadPrefs(uid) {
-  try {
-    const raw = localStorage.getItem(`${PREFS_KEY}.${uid}`);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return {
-      customStatus: String(parsed.customStatus || ""),
-      shareStats: parsed.shareStats !== false,
-      shareListening: Boolean(parsed.shareListening),
-      characterId: parsed.characterId || "sleepbunny",
-    };
-  } catch {
-    return {
-      customStatus: "",
-      shareStats: true,
-      shareListening: false,
-      characterId: "sleepbunny",
-    };
-  }
-}
-
-function savePrefs(uid, patch) {
-  const next = { ...loadPrefs(uid), ...patch };
-  localStorage.setItem(`${PREFS_KEY}.${uid}`, JSON.stringify(next));
-  return next;
-}
-
-/**
- * User-facing doc shaped like the Firebase users/{uid} document.
- * @param {string} [uid]
- */
 export async function loadUserDoc(uid = currentUid()) {
   if (!uid) return null;
-  let profile = getCachedProfile();
-  if (!profile || profile.id !== uid) {
-    profile = await loadCurrentProfile();
-  }
-  if (!profile || profile.id !== uid) return null;
-  const prefs = loadPrefs(uid);
-  return {
-    id: profile.id,
-    username: profile.username,
-    displayName: profile.username,
-    characterId: prefs.characterId,
-    customStatus: prefs.customStatus,
-    shareStats: prefs.shareStats,
-    shareListening: prefs.shareListening,
-  };
+  await loadSdk();
+  const { doc, getDoc } = firestoreFns;
+  const snap = await getDoc(doc(db, "users", uid));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/**
- * @param {Record<string, unknown>} patch
- */
 export async function updateUserDoc(patch) {
   const uid = currentUid();
   if (!uid) throw new Error("Sign in first.");
-  const allowed = {};
-  if ("customStatus" in patch) allowed.customStatus = String(patch.customStatus || "");
-  if ("characterId" in patch) allowed.characterId = String(patch.characterId || "sleepbunny");
-  if ("shareStats" in patch) allowed.shareStats = Boolean(patch.shareStats);
-  if ("shareListening" in patch) allowed.shareListening = Boolean(patch.shareListening);
-  savePrefs(uid, allowed);
+  await loadSdk();
+  const { doc, updateDoc } = firestoreFns;
+  await updateDoc(doc(db, "users", uid), patch);
 }
 
-/**
- * @param {{ shareStats: boolean, shareListening: boolean }} privacy
- */
-export async function savePrivacy(privacy) {
+export async function savePrivacy({ shareStats, shareListening }) {
   await updateUserDoc({
-    shareStats: Boolean(privacy.shareStats),
-    shareListening: Boolean(privacy.shareListening),
+    shareStats: Boolean(shareStats),
+    shareListening: Boolean(shareListening),
   });
+  if (!shareListening) {
+    await clearNowPlaying();
+  }
 }
 
-/**
- * Public stats from Supabase profile (authoritative for XP / level / streak).
- */
-export async function loadOwnPublicStats() {
-  const profile = await loadPublicProfileFromSupabase();
-  if (!profile) return null;
+function weekStartMs(now = Date.now()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay());
+  return d.getTime();
+}
+
+function dayStartMs(now = Date.now()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function summarizeSessionsForPublic(sessions, now = Date.now()) {
+  const completed = sessions
+    .filter((s) => s.completed)
+    .slice()
+    .sort((a, b) => (a.endedAt || 0) - (b.endedAt || 0));
+
+  const todayStart = dayStartMs(now);
+  const weekStart = weekStartMs(now);
+  const today = completed.filter((s) => s.endedAt >= todayStart);
+  const week = completed.filter((s) => s.endedAt >= weekStart);
+
+  const todayOnTaskMs = today.reduce(
+    (sum, s) => sum + (s.durationMs || 0) * (s.onTaskRatio ?? 0),
+    0
+  );
+  const todayMs = today.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+  const weeklyFocusMs = week.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+
+  // Replay sessions with Iris progress XP (level + XP toward next).
+  let level = 1;
+  let xp = 0;
+  for (const session of completed) {
+    const durationMs = Math.max(0, Number(session.durationMs) || 0);
+    const onTaskRatio =
+      typeof session.onTaskRatio === "number"
+        ? Math.min(1, Math.max(0, session.onTaskRatio))
+        : (Number(session.onTaskPercent) || 100) / 100;
+    const focusedMinutes = Math.floor((durationMs * onTaskRatio) / 60000);
+    const earned = calculateSessionXp(focusedMinutes, true);
+    const after = applyXp(level, xp, earned);
+    level = after.level;
+    xp = after.xp;
+  }
+  const progress = normalizeProgressXp(level, xp, { xpModel: "progress" });
+  const streakDays = calculateFocusStreakDays(completed, now);
+  const localView = calculateProfileStats(
+    {
+      sessions: completed,
+      level: progress.level,
+      xp: progress.xp,
+      xpModel: "progress",
+      focusStreak: streakDays,
+      lastCompletedFocusDate: null,
+      updatedAt: now,
+    },
+    now
+  );
+  const summary = publicSessionSummaryFromStats(localView);
+
   return {
-    level: profile.focus_level ?? 1,
-    xp: profile.xp ?? 0,
-    streakDays: profile.focus_streak ?? 0,
-    sessionsCompleted: profile.sessions_completed ?? 0,
-    todayFocusPercent: 0,
-    weeklyFocusMs: 0,
-    updatedAt: Date.now(),
+    todayFocusPercent: todayMs ? Math.round((todayOnTaskMs / todayMs) * 100) : 0,
+    weeklyFocusMs,
+    streakDays,
+    sessionsCompleted: summary.sessions_completed ?? completed.length,
+    xp: progress.xp,
+    level: progress.level,
+    xpModel: "progress",
+    longestSessionMs: summary.longest_session_ms ?? 0,
+    topDistraction: summary.top_distraction ?? null,
+    topProductiveSite: summary.top_productive_site ?? null,
+    characterHealth: summary.character_health ?? 0,
+    updatedAt: now,
   };
 }
 
-/**
- * Local session history only (full browse logs stay private).
- * @returns {Promise<object[]>}
- */
-export async function loadMySessions() {
-  return loadProfileStore().sessions || [];
-}
-
-/**
- * Persist a completed session via Iris XP + Supabase public sync.
- * @param {object} session
- */
 export async function saveSession(session) {
-  if (!currentUid()) return null;
-  const durationMs = Number(session.durationMs) || 0;
-  const durationSeconds =
-    Number(session.durationSeconds) || Math.round(durationMs / 1000);
-  const onTaskRatio =
-    typeof session.onTaskRatio === "number"
-      ? session.onTaskRatio
-      : (Number(session.onTaskPercent) || 100) / 100;
-  const focusedMinutes = Math.max(
-    0,
-    Math.floor((durationMs * Math.max(0, Math.min(1, onTaskRatio))) / 60000)
-  );
-
-  await recordCompletedSession({
-    id: session.id || `session_${Date.now()}`,
-    startedAt: session.startedAt || Date.now() - durationMs,
-    endedAt: session.endedAt || Date.now(),
-    durationMs,
-    durationSeconds,
-    completed: session.completed !== false,
-    focusedMinutes,
-    distractionDomains: session.distractionDomains || {},
-    productiveDomains: session.productiveDomains || {},
-    task: session.task || "",
-  });
+  const uid = currentUid();
+  if (!uid) return null;
+  await loadSdk();
+  const { doc, setDoc, collection, getDocs, query, orderBy } = firestoreFns;
+  const ref = doc(db, "users", uid, "sessions", session.id);
+  await setDoc(ref, session);
+  const snaps = await getDocs(query(collection(db, "users", uid, "sessions"), orderBy("endedAt", "desc")));
+  const sessions = snaps.docs.map((item) => item.data());
+  const publicStats = summarizeSessionsForPublic(sessions);
+  await setDoc(doc(db, "users", uid, "public", "stats"), publicStats);
   return session;
 }
 
-/**
- * @param {object[]} pending
- */
+export async function loadMySessions() {
+  const uid = currentUid();
+  if (!uid) return [];
+  await loadSdk();
+  const { collection, getDocs, query, orderBy } = firestoreFns;
+  const snaps = await getDocs(query(collection(db, "users", uid, "sessions"), orderBy("endedAt", "desc")));
+  return snaps.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
 export async function syncPendingSessions(pending = []) {
   if (!currentUid() || !pending.length) return [];
   const remaining = [];
@@ -257,81 +238,178 @@ export async function syncPendingSessions(pending = []) {
   return remaining;
 }
 
-/**
- * @param {string} username
- */
+export async function findUidByUsername(username) {
+  await loadSdk();
+  const key = usernameKey(username);
+  if (!key) return null;
+  const { doc, getDoc } = firestoreFns;
+  const snap = await getDoc(doc(db, "usernames", key));
+  return snap.exists() ? snap.data().uid : null;
+}
+
 export async function sendFriendRequest(username) {
-  const me = currentUid();
-  if (!me) throw new Error("Sign in first.");
-  const target = await searchUserByUsername(username);
-  if (!target) throw new Error("No account with that username.");
-  if (target.id === me) throw new Error("You cannot add yourself.");
-  const existing = await getActiveFriendshipWith(target.id);
-  if (existing?.status === "accepted") {
-    throw new Error("You're already friends.");
-  }
-  if (existing?.status === "pending") {
-    throw new Error("Friend request already pending.");
-  }
-  await sendFriendRequestById(target.id);
-}
-
-export async function listIncomingRequests() {
-  const rows = await getIncomingPendingRequests();
-  return rows.map((row) => ({
-    id: row.id,
-    fromUid: row.requester_id,
-    fromUsername: row.requester?.username || "friend",
-    createdAt: row.created_at,
-  }));
-}
-
-/**
- * Accept by friendship id (preferred) or requester uid.
- * @param {string} friendshipIdOrFromUid
- */
-export async function acceptFriendRequest(friendshipIdOrFromUid) {
-  const incoming = await getIncomingPendingRequests();
-  const match =
-    incoming.find((r) => r.id === friendshipIdOrFromUid) ||
-    incoming.find((r) => r.requester_id === friendshipIdOrFromUid);
-  if (!match) throw new Error("Pending request not found.");
-  await acceptFriendshipById(match.id);
-}
-
-export async function loadFriendsActivity() {
-  const accepted = await getAcceptedFriends();
-  return accepted.map(({ friend }) => {
-    const prefs = loadPrefs(friend.id);
-    // Friends see public XP fields from profiles (privacy prefs are local for now).
-    const shareStats = prefs.shareStats !== false;
-    return {
-      id: friend.id,
-      username: friend.username,
-      characterId: prefs.characterId || "sleepbunny",
-      customStatus: prefs.customStatus || "",
-      shareStats,
-      shareListening: Boolean(prefs.shareListening),
-      stats: shareStats
-        ? {
-            level: friend.focus_level ?? 1,
-            xp: friend.xp ?? 0,
-            streakDays: friend.focus_streak ?? 0,
-            sessionsCompleted: friend.sessions_completed ?? 0,
-            todayFocusPercent: 0,
-            weeklyFocusMs: 0,
-          }
-        : null,
-      listening: null,
-    };
+  const uid = currentUid();
+  if (!uid) throw new Error("Sign in first.");
+  const otherUid = await findUidByUsername(username);
+  if (!otherUid) throw new Error("No account with that username.");
+  if (otherUid === uid) throw new Error("You cannot add yourself.");
+  const me = await loadUserDoc(uid);
+  await loadSdk();
+  const { doc, setDoc } = firestoreFns;
+  await setDoc(doc(db, "friendRequests", otherUid, "incoming", uid), {
+    fromUid: uid,
+    fromUsername: me?.username || "friend",
+    createdAt: Date.now(),
   });
 }
 
-/** Spotify stubs — not backed by Supabase yet. */
-export async function saveSpotifyTokens() {}
-export async function loadSpotifyTokens() {
-  return null;
+export async function listIncomingRequests() {
+  const uid = currentUid();
+  if (!uid) return [];
+  await loadSdk();
+  const { collection, getDocs } = firestoreFns;
+  const snaps = await getDocs(collection(db, "friendRequests", uid, "incoming"));
+  return snaps.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
-export async function clearSpotifyTokens() {}
-export async function saveNowPlaying() {}
-export async function clearNowPlaying() {}
+
+export async function acceptFriendRequest(fromUid) {
+  const uid = currentUid();
+  if (!uid) throw new Error("Sign in first.");
+  await loadSdk();
+  const { doc, setDoc, deleteDoc } = firestoreFns;
+  await setDoc(doc(db, "friends", uid, "accepted", fromUid), { uid: fromUid, since: Date.now() });
+  await setDoc(doc(db, "friends", fromUid, "accepted", uid), { uid, since: Date.now() });
+  await deleteDoc(doc(db, "friendRequests", uid, "incoming", fromUid));
+}
+
+export async function listFriendIds() {
+  const uid = currentUid();
+  if (!uid) return [];
+  await loadSdk();
+  const { collection, getDocs } = firestoreFns;
+  const snaps = await getDocs(collection(db, "friends", uid, "accepted"));
+  return snaps.docs.map((item) => item.id);
+}
+
+async function readFriendFacing(uid) {
+  await loadSdk();
+  const { doc, getDoc } = firestoreFns;
+  const userSnap = await getDoc(doc(db, "users", uid));
+  if (!userSnap.exists()) return null;
+  const user = { id: uid, ...userSnap.data() };
+  const view = {
+    id: uid,
+    username: user.username || "friend",
+    characterId: user.characterId || "sleepbunny",
+    customStatus: user.customStatus || "",
+    shareStats: Boolean(user.shareStats),
+    shareListening: Boolean(user.shareListening),
+    stats: null,
+    listening: null,
+  };
+
+  if (user.shareStats) {
+    try {
+      const statsSnap = await getDoc(doc(db, "users", uid, "public", "stats"));
+      view.stats = statsSnap.exists() ? statsSnap.data() : null;
+    } catch {
+      view.stats = null;
+    }
+  }
+
+  if (user.shareListening) {
+    try {
+      const listenSnap = await getDoc(doc(db, "users", uid, "public", "nowPlaying"));
+      view.listening = listenSnap.exists() ? listenSnap.data() : null;
+    } catch {
+      view.listening = null;
+    }
+  }
+
+  return view;
+}
+
+export async function loadFriendsActivity() {
+  const ids = await listFriendIds();
+  const rows = [];
+  for (const id of ids) {
+    try {
+      const row = await readFriendFacing(id);
+      if (row) rows.push(row);
+    } catch {
+      // Permission denied if the friendship docs are incomplete.
+    }
+  }
+  return rows;
+}
+
+export async function loadOwnPublicStats() {
+  const uid = currentUid();
+  if (!uid) return null;
+  await loadSdk();
+  const { doc, getDoc } = firestoreFns;
+  const snap = await getDoc(doc(db, "users", uid, "public", "stats"));
+  if (snap.exists()) return snap.data();
+  const sessions = await loadMySessions();
+  return summarizeSessionsForPublic(sessions);
+}
+
+export async function saveNowPlaying(payload) {
+  const uid = currentUid();
+  if (!uid) return;
+  const me = await loadUserDoc(uid);
+  if (!me?.shareListening) {
+    await clearNowPlaying();
+    return;
+  }
+  await loadSdk();
+  const { doc, setDoc } = firestoreFns;
+  await setDoc(doc(db, "users", uid, "public", "nowPlaying"), {
+    ...payload,
+    updatedAt: Date.now(),
+  });
+}
+
+export async function clearNowPlaying() {
+  const uid = currentUid();
+  if (!uid) return;
+  await loadSdk();
+  const { doc, deleteDoc } = firestoreFns;
+  try {
+    await deleteDoc(doc(db, "users", uid, "public", "nowPlaying"));
+  } catch {
+    // Already gone.
+  }
+}
+
+export async function saveSpotifyTokens(tokens) {
+  const uid = currentUid();
+  if (!uid) throw new Error("Sign in first.");
+  await loadSdk();
+  const { doc, setDoc } = firestoreFns;
+  await setDoc(doc(db, "users", uid, "private", "spotify"), {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken || "",
+    expiresAt: tokens.expiresAt || 0,
+    tokenType: tokens.tokenType || "Bearer",
+    updatedAt: Date.now(),
+  });
+}
+
+export async function loadSpotifyTokens() {
+  const uid = currentUid();
+  if (!uid) return null;
+  await loadSdk();
+  const { doc, getDoc } = firestoreFns;
+  const snap = await getDoc(doc(db, "users", uid, "private", "spotify"));
+  return snap.exists() ? snap.data() : null;
+}
+
+export async function clearSpotifyTokens() {
+  const uid = currentUid();
+  if (!uid) return;
+  await loadSdk();
+  const { doc, deleteDoc } = firestoreFns;
+  await deleteDoc(doc(db, "users", uid, "private", "spotify"));
+  await clearNowPlaying();
+}

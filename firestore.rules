@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isMutualFriend(otherUid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/friends/$(request.auth.uid)/accepted/$(otherUid))
+        && exists(/databases/$(database)/documents/friends/$(otherUid)/accepted/$(request.auth.uid));
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function sharesStats(uid) {
+      return userDoc(uid).shareStats == true;
+    }
+
+    function sharesListening(uid) {
+      return userDoc(uid).shareListening == true;
+    }
+
+    match /usernames/{name} {
+      allow read: if signedIn();
+      allow create: if isOwner(request.resource.data.uid)
+        && !exists(/databases/$(database)/documents/usernames/$(name))
+        && request.resource.data.username is string
+        && request.resource.data.username.lower() == name;
+      allow delete: if isOwner(resource.data.uid);
+      allow update: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isMutualFriend(uid);
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+      allow delete: if isOwner(uid);
+
+      match /sessions/{sessionId} {
+        allow read: if isOwner(uid) || (isMutualFriend(uid) && sharesStats(uid));
+        allow create, update, delete: if isOwner(uid);
+      }
+
+      match /public/stats {
+        allow read: if isOwner(uid) || (isMutualFriend(uid) && sharesStats(uid));
+        allow write: if isOwner(uid);
+      }
+
+      match /public/nowPlaying {
+        allow read: if isOwner(uid) || (isMutualFriend(uid) && sharesListening(uid));
+        allow write: if isOwner(uid);
+      }
+
+      match /private/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    match /friends/{uid}/accepted/{otherUid} {
+      allow read: if isOwner(uid) || request.auth.uid == otherUid;
+      allow create, delete: if isOwner(uid);
+      allow update: if false;
+    }
+
+    match /friendRequests/{uid}/incoming/{fromUid} {
+      allow read: if isOwner(uid) || request.auth.uid == fromUid;
+      allow create: if signedIn() && request.auth.uid == fromUid && uid != fromUid;
+      allow delete: if isOwner(uid) || request.auth.uid == fromUid;
+      allow update: if false;
+    }
+  }
+}

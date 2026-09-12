@@ -1,7 +1,8 @@
 /**
- * Extension focus-session → stats → Supabase sync.
+ * Extension focus-session → stats → Firebase sync.
  * Reuses website calculation utilities (XP, level, Focus Streak, session summary).
  */
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   applyXp,
   calculateProfileStats,
@@ -15,7 +16,7 @@ import {
 } from "../web/profile/focusStreak.js";
 import { publicSessionSummaryFromStats } from "../web/profile/sessionSummary.js";
 import { isProgressAhead } from "../web/profile/xp.js";
-import { getSupabase } from "./supabaseClient.js";
+import { getFirebaseAuth, getFirebaseDb } from "./firebaseClient.js";
 import {
   loadChromeProfileStore,
   loadPendingPublicSync,
@@ -24,9 +25,6 @@ import {
   saveChromeProfileStore,
   savePendingPublicSync,
 } from "./chromeProfileStorage.js";
-
-const PROFILE_SELECT =
-  "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health, created_at";
 
 /**
  * @typedef {Object} CompletedSessionInput
@@ -40,16 +38,18 @@ const PROFILE_SELECT =
  */
 
 /**
- * Sync public fields only. Queues for retry on failure.
- *
  * @param {string} userId
  * @param {object} stats
  * @param {string} [sessionId]
+ * @param {object} [sessionDoc]
  */
-export async function syncProfileStats(userId, stats, sessionId) {
-  const focus_level = Math.max(1, Math.floor(Number(stats.focus_level) || 1));
+export async function syncProfileStats(userId, stats, sessionId, sessionDoc) {
+  const level = Math.max(1, Math.floor(Number(stats.focus_level ?? stats.level) || 1));
   const xp = Math.max(0, Math.floor(Number(stats.xp) || 0));
-  const focus_streak = Math.max(0, Math.floor(Number(stats.focus_streak) || 0));
+  const streakDays = Math.max(
+    0,
+    Math.floor(Number(stats.focus_streak ?? stats.focusStreakDays) || 0)
+  );
   const summary = publicSessionSummaryFromStats({
     longestSessionMs: stats.longest_session_ms ?? stats.longestSessionMs,
     sessionsCompleted: stats.sessions_completed ?? stats.sessionsCompleted,
@@ -57,22 +57,32 @@ export async function syncProfileStats(userId, stats, sessionId) {
     topProductiveSite: stats.top_productive_site ?? stats.topProductiveSite,
     characterHealth: stats.character_health ?? stats.characterHealth,
   });
-  const payload = { focus_level, xp, focus_streak, ...summary };
+
+  const payload = {
+    level,
+    xp,
+    xpModel: "progress",
+    streakDays,
+    sessionsCompleted: summary.sessions_completed ?? 0,
+    longestSessionMs: summary.longest_session_ms ?? 0,
+    topDistraction: summary.top_distraction ?? null,
+    topProductiveSite: summary.top_productive_site ?? null,
+    characterHealth: summary.character_health ?? 0,
+    updatedAt: Date.now(),
+  };
 
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from("profiles")
-      .update(payload)
-      .eq("id", userId)
-      .select(PROFILE_SELECT)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) throw new Error("No profiles row returned for sync.");
-
+    const db = getFirebaseDb();
+    if (sessionId && sessionDoc) {
+      await setDoc(doc(db, "users", userId, "sessions", sessionId), sessionDoc, {
+        merge: true,
+      });
+    }
+    await setDoc(doc(db, "users", userId, "public", "stats"), payload, {
+      merge: true,
+    });
     await clearPendingSyncForUser(userId);
-    return data;
+    return { id: userId, ...payload };
   } catch (err) {
     console.error(
       "[Focus Buddy] Profile sync failed — local progress kept; queued for retry:",
@@ -82,6 +92,7 @@ export async function syncProfileStats(userId, stats, sessionId) {
       userId,
       ...payload,
       sessionId,
+      sessionDoc: sessionDoc || null,
       updatedAt: Date.now(),
     });
     return null;
@@ -89,9 +100,6 @@ export async function syncProfileStats(userId, stats, sessionId) {
 }
 
 /**
- * Record a completed focus session using the same XP / level / streak rules as the website.
- * Idempotent on sessionId. Uploads summary aggregates only (not full browse history).
- *
  * @param {CompletedSessionInput} sessionInput
  */
 export async function recordCompletedSession(sessionInput) {
@@ -111,13 +119,13 @@ export async function recordCompletedSession(sessionInput) {
   }
 
   const store = await loadChromeProfileStore();
-  await hydratePublicTotalsFromSupabase(store);
+  await hydratePublicTotalsFromFirebase(store);
 
   const alreadyLocal = store.sessions.some((s) => s && s.id === sessionId);
   if (alreadyLocal) {
     await markSessionProcessed(sessionId);
     const stats = calculateProfileStats(store);
-    const profile = await syncAfterLocalSave(store, stats, sessionId);
+    const profile = await syncAfterLocalSave(store, stats, sessionId, null);
     return { store, stats, profile, skippedDuplicate: true };
   }
 
@@ -175,14 +183,15 @@ export async function recordCompletedSession(sessionInput) {
   await markSessionProcessed(sessionId);
 
   const stats = calculateProfileStats(saved, endedAt);
-  const profile = await syncAfterLocalSave(saved, stats, sessionId);
+  const profile = await syncAfterLocalSave(saved, stats, sessionId, {
+    ...session,
+    durationSeconds: Math.round(durationMs / 1000),
+    onTaskPercent: Math.round(onTaskRatio * 100),
+  });
 
   return { store: saved, stats, profile, skippedDuplicate: false };
 }
 
-/**
- * Retry any queued public-stat syncs (e.g. after earlier network failure).
- */
 export async function flushPendingPublicSync() {
   const queue = await loadPendingPublicSync();
   if (queue.length === 0) return;
@@ -190,24 +199,31 @@ export async function flushPendingPublicSync() {
   const remaining = [];
   for (const item of queue) {
     try {
-      const supabase = getSupabase();
-      const summary = publicSessionSummaryFromStats({
-        longestSessionMs: item.longest_session_ms,
-        sessionsCompleted: item.sessions_completed,
-        topDistraction: item.top_distraction,
-        topProductiveSite: item.top_productive_site,
-        characterHealth: item.character_health,
-      });
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          focus_level: item.focus_level,
+      const db = getFirebaseDb();
+      if (item.sessionId && item.sessionDoc) {
+        await setDoc(
+          doc(db, "users", item.userId, "sessions", item.sessionId),
+          item.sessionDoc,
+          { merge: true }
+        );
+      }
+      await setDoc(
+        doc(db, "users", item.userId, "public", "stats"),
+        {
+          level: item.level ?? item.focus_level,
           xp: item.xp,
-          focus_streak: item.focus_streak ?? item.focus_flame,
-          ...summary,
-        })
-        .eq("id", item.userId);
-      if (error) throw error;
+          xpModel: "progress",
+          streakDays: item.streakDays ?? item.focus_streak,
+          sessionsCompleted: item.sessionsCompleted ?? item.sessions_completed ?? 0,
+          longestSessionMs: item.longestSessionMs ?? item.longest_session_ms ?? 0,
+          topDistraction: item.topDistraction ?? item.top_distraction ?? null,
+          topProductiveSite:
+            item.topProductiveSite ?? item.top_productive_site ?? null,
+          characterHealth: item.characterHealth ?? item.character_health ?? 0,
+          updatedAt: Date.now(),
+        },
+        { merge: true }
+      );
     } catch (err) {
       console.error("[Focus Buddy] Pending sync retry failed:", err);
       remaining.push(item);
@@ -219,24 +235,20 @@ export async function flushPendingPublicSync() {
 /**
  * @param {import('../web/profile/profileTypes.js').ProfileStore} store
  */
-async function hydratePublicTotalsFromSupabase(store) {
+async function hydratePublicTotalsFromFirebase(store) {
   try {
-    const supabase = getSupabase();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user?.id;
+    const auth = getFirebaseAuth();
+    const userId = auth.currentUser?.uid;
     if (!userId) return;
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(
-        "xp, focus_level, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health"
-      )
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return;
+    const db = getFirebaseDb();
+    const snap = await getDoc(doc(db, "users", userId, "public", "stats"));
+    if (!snap.exists()) return;
+    const data = snap.data();
 
-    const remote = normalizeProgressXp(data.focus_level, data.xp, {});
+    const remote = normalizeProgressXp(data.level, data.xp, {
+      xpModel: data.xpModel === "progress" ? "progress" : null,
+    });
     const local = normalizeProgressXp(store.level, store.xp, {
       xpModel: store.xpModel,
     });
@@ -245,46 +257,13 @@ async function hydratePublicTotalsFromSupabase(store) {
     store.level = best.level;
     store.xp = best.xp;
     store.xpModel = "progress";
-
     store.focusStreak = Math.max(
       store.focusStreak || 0,
-      Math.floor(Number(data.focus_streak) || 0)
+      Math.floor(Number(data.streakDays) || 0)
     );
-
-    // Keep a lightweight summary snapshot on the store for UI/hydration.
-    store.summary = {
-      longestSessionMs: Math.max(
-        0,
-        Math.floor(Number(data.longest_session_ms) || 0)
-      ),
-      sessionsCompleted: Math.max(
-        0,
-        Math.floor(Number(data.sessions_completed) || 0)
-      ),
-      topDistraction: data.top_distraction || null,
-      topProductiveSite: data.top_productive_site || null,
-      characterHealth: Math.max(
-        0,
-        Math.min(100, Math.floor(Number(data.character_health) || 0))
-      ),
-    };
-
-    if (
-      remote.migrated &&
-      (remote.level !== data.focus_level || remote.xp !== data.xp)
-    ) {
-      const toSync = isProgressAhead(local, remote) ? local : remote;
-      const stats = calculateProfileStats(store);
-      await syncProfileStats(userId, {
-        focus_level: toSync.level,
-        xp: toSync.xp,
-        focus_streak: store.focusStreak,
-        ...publicSessionSummaryFromStats(stats),
-      });
-    }
   } catch (err) {
     console.warn(
-      "[Focus Buddy] Could not hydrate public totals from Supabase (continuing locally):",
+      "[Focus Buddy] Could not hydrate public totals from Firebase (continuing locally):",
       err?.message || err
     );
   }
@@ -294,12 +273,12 @@ async function hydratePublicTotalsFromSupabase(store) {
  * @param {import('../web/profile/profileTypes.js').ProfileStore} store
  * @param {import('../web/profile/profileTypes.js').ProfileStatsView} stats
  * @param {string} sessionId
+ * @param {object|null} sessionDoc
  */
-async function syncAfterLocalSave(store, stats, sessionId) {
+async function syncAfterLocalSave(store, stats, sessionId, sessionDoc) {
   try {
-    const supabase = getSupabase();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user?.id;
+    const auth = getFirebaseAuth();
+    const userId = auth.currentUser?.uid;
     if (!userId) {
       console.warn(
         "[Focus Buddy] Session completed locally, but no signed-in user — cloud sync skipped."
@@ -315,7 +294,8 @@ async function syncAfterLocalSave(store, stats, sessionId) {
         focus_streak: stats.focusStreakDays,
         ...publicSessionSummaryFromStats(stats),
       },
-      sessionId
+      sessionId,
+      sessionDoc
     );
   } catch (err) {
     console.error("[Focus Buddy] Sync after session save failed:", err);
@@ -323,9 +303,6 @@ async function syncAfterLocalSave(store, stats, sessionId) {
   }
 }
 
-/**
- * @param {import('./chromeProfileStorage.js').PendingPublicSync} item
- */
 async function enqueuePendingSync(item) {
   const queue = await loadPendingPublicSync();
   const withoutUser = queue.filter((q) => q.userId !== item.userId);
@@ -333,9 +310,6 @@ async function enqueuePendingSync(item) {
   await savePendingPublicSync(withoutUser.slice(-20));
 }
 
-/**
- * @param {string} userId
- */
 async function clearPendingSyncForUser(userId) {
   const queue = await loadPendingPublicSync();
   await savePendingPublicSync(queue.filter((q) => q.userId !== userId));

@@ -40,6 +40,8 @@ const FRIENDSHIP_COLUMNS = "id, requester_id, addressee_id, status, created_at";
 
 /**
  * Look up a public profile by unique username.
+ * Uses a security-definer RPC so friend search works even when
+ * profiles SELECT RLS only allows reading your own / friends' rows.
  *
  * @param {string} username
  * @returns {Promise<ProfileRow|null>}
@@ -50,6 +52,21 @@ export async function searchUserByUsername(username) {
   const normalized = normalizeUsername(username);
   const usernameError = validateUsername(normalized);
   if (usernameError) throw new Error(usernameError);
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "lookup_profile_by_username",
+    { requested_username: normalized }
+  );
+
+  if (!rpcError) {
+    const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+    return row || null;
+  }
+
+  // Fallback for projects that have not run lookup_profile_by_username.sql yet.
+  if (rpcError.code !== "PGRST202" && rpcError.code !== "42883") {
+    // Keep going to table select for older/missing RPC; other errors still try select.
+  }
 
   const { data, error } = await supabase
     .from("profiles")

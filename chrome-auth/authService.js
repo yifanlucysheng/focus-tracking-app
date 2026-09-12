@@ -1,8 +1,13 @@
 import {
-  getExtensionSupabaseConfigStatus,
-  getSupabase,
-  initSupabaseClient,
-} from "./supabaseClient.js";
+  getFirebaseAuth,
+  getFirebaseConfigStatus,
+  initFirebaseClient,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  firebaseSignOut,
+} from "./firebaseClient.js";
+import { doc, getDoc } from "firebase/firestore";
+import { getFirebaseDb } from "./firebaseClient.js";
 
 /**
  * @typedef {Object} ExtensionAuthState
@@ -13,21 +18,14 @@ import {
  * @property {{ id: string, username: string, focus_level: number, xp: number, focus_streak: number }|null} profile
  */
 
-/**
- * @param {{ url?: string, publishableKey?: string }} config
- */
-export async function initExtensionAuth(config) {
-  initSupabaseClient(config);
-  // Touch session so persisted chrome.storage tokens are restored.
-  await getSupabase().auth.getSession();
-  return getAuthState();
-}
+/** @type {(() => void)|null} */
+let unsubAuth = null;
 
 /**
- * @returns {Promise<ExtensionAuthState>}
+ * @param {Record<string, string>} config
  */
-export async function getAuthState() {
-  const status = getExtensionSupabaseConfigStatus();
+export async function initExtensionAuth(config) {
+  const status = getFirebaseConfigStatus(config);
   if (!status.ok) {
     return {
       configured: false,
@@ -38,13 +36,26 @@ export async function getAuthState() {
     };
   }
 
-  try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
+  initFirebaseClient(config);
+  const auth = getFirebaseAuth();
 
-    const session = data.session;
-    if (!session?.user) {
+  // Wait for the first auth state so persistence can restore.
+  await new Promise((resolve) => {
+    if (unsubAuth) unsubAuth();
+    unsubAuth = onAuthStateChanged(auth, () => resolve());
+  });
+
+  return getAuthState();
+}
+
+/**
+ * @returns {Promise<ExtensionAuthState>}
+ */
+export async function getAuthState() {
+  try {
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+    if (!user) {
       return {
         configured: true,
         signedIn: false,
@@ -52,57 +63,38 @@ export async function getAuthState() {
         profile: null,
       };
     }
-
-    const profile = await fetchOwnProfile(session.user.id);
+    const profile = await fetchOwnProfile(user.uid);
     return {
       configured: true,
       signedIn: true,
-      user: {
-        id: session.user.id,
-        email: session.user.email,
-      },
+      user: { id: user.uid, email: user.email || undefined },
       profile,
     };
   } catch (err) {
     return {
-      configured: true,
+      configured: false,
+      configMessage: err?.message || "Could not read auth session.",
       signedIn: false,
       user: null,
       profile: null,
-      configMessage: err?.message || "Could not read auth session.",
     };
   }
 }
 
 /**
- * Sign in with an existing FocusBuddy website account.
- *
  * @param {{ email: string, password: string }} input
- * @returns {Promise<ExtensionAuthState>}
  */
 export async function signIn({ email, password }) {
-  assertConfigured();
   if (!email?.trim()) throw new Error("Email is required.");
   if (!password) throw new Error("Password is required.");
-
-  const supabase = getSupabase();
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
-    password,
-  });
-  if (error) throw error;
-  if (!data.session?.user) throw new Error("Sign in failed — no session returned.");
-
+  const auth = getFirebaseAuth();
+  await signInWithEmailAndPassword(auth, email.trim(), password);
   return getAuthState();
 }
 
-/**
- * @returns {Promise<ExtensionAuthState>}
- */
 export async function signOut() {
-  assertConfigured();
-  const { error } = await getSupabase().auth.signOut();
-  if (error) throw error;
+  const auth = getFirebaseAuth();
+  await firebaseSignOut(auth);
   return getAuthState();
 }
 
@@ -110,19 +102,16 @@ export async function signOut() {
  * @param {string} userId
  */
 async function fetchOwnProfile(userId) {
-  const { data, error } = await getSupabase()
-    .from("profiles")
-    .select(
-      "id, username, focus_level, xp, focus_streak, longest_session_ms, sessions_completed, top_distraction, top_productive_site, character_health"
-    )
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
-}
-
-function assertConfigured() {
-  const status = getExtensionSupabaseConfigStatus();
-  if (!status.ok) throw new Error(status.message);
+  const db = getFirebaseDb();
+  const userSnap = await getDoc(doc(db, "users", userId));
+  const statsSnap = await getDoc(doc(db, "users", userId, "public", "stats"));
+  const user = userSnap.exists() ? userSnap.data() : {};
+  const stats = statsSnap.exists() ? statsSnap.data() : {};
+  return {
+    id: userId,
+    username: user.username || "you",
+    focus_level: Math.max(1, Math.floor(Number(stats.level) || 1)),
+    xp: Math.max(0, Math.floor(Number(stats.xp) || 0)),
+    focus_streak: Math.max(0, Math.floor(Number(stats.streakDays) || 0)),
+  };
 }

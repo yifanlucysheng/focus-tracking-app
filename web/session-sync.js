@@ -1,13 +1,7 @@
-import {
-  isCloudConfigured,
-  listenAuth,
-  syncPendingSessions,
-} from "./cloud.js";
+import { isCloudConfigured, listenAuth, syncPendingSessions } from "./cloud.js";
 
 export async function bootCloudSync() {
-  if (!isCloudConfigured()) {
-    return "Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local to sync accounts.";
-  }
+  if (!isCloudConfigured()) return "Add Firebase keys in web/firebase-config.js to sync accounts.";
   try {
     await listenAuth(async (user) => {
       if (!user || !globalThis.chrome?.storage?.local) return;
@@ -17,7 +11,7 @@ export async function bootCloudSync() {
     });
     return "";
   } catch (error) {
-    return error.message || "Could not connect to Supabase.";
+    return error.message || "Could not connect to Firebase.";
   }
 }
 
