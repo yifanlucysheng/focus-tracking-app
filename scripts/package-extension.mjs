@@ -115,6 +115,11 @@ if (fs.existsSync(path.join(root, "couchareasprites"))) {
   );
 }
 copyFile("secrets.public.js");
+if (fs.existsSync(path.join(root, "assets"))) {
+  fs.cpSync(path.join(root, "assets"), path.join(outDir, "assets"), {
+    recursive: true,
+  });
+}
 
 // Popup ES modules import these (Friends activity + cloud sync).
 const popupWebModules = [
@@ -132,8 +137,7 @@ for (const rel of popupWebModules) {
   REQUIRED_FILES.push(rel);
 }
 
-// Optional local overrides (Gemini, etc.). Do not copy the placeholder example —
-// it would overwrite secrets.public.js Firebase keys.
+// Optional local overrides (Gemini, etc.). Do not copy the placeholder example.
 const secretsSrc = path.join(root, "secrets.local.js");
 if (fs.existsSync(secretsSrc)) {
   copyFile("secrets.local.js");

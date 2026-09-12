@@ -15,6 +15,7 @@ import {
   syncLiveCharacterHealthFromRatio,
   syncProfileStats,
 } from "./sessionStatsService.js";
+import { startIncomingChatWatch } from "./chatNotifyService.js";
 
 const FocusBuddyAuth = {
   init: initExtensionAuth,
@@ -26,6 +27,7 @@ const FocusBuddyAuth = {
   syncLiveCharacterHealth,
   syncLiveCharacterHealthFromRatio,
   flushPendingPublicSync,
+  startIncomingChatWatch,
 };
 
 globalThis.FocusBuddyAuth = FocusBuddyAuth;

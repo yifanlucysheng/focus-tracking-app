@@ -6,8 +6,9 @@
   }
 
   // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
-  const OVERLAY_VERSION = 15;
+  const OVERLAY_VERSION = 21;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
+  document.getElementById("focus-buddy-overlay-host")?.remove();
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
 
@@ -50,6 +51,37 @@
     "moonbuddysprites/stage4moon/stage4bunny.png",
     "moonbuddysprites/stage5moon/gravestone.png",
   ];
+
+  const STAGE_SIZE_FACTOR = 1.25;
+  const OVERLAY_BASE_SIZE_PX = 125;
+
+  /**
+   * Stage 1 (healthiest) = 1×. Each worse stage multiplies size by 1.25.
+   * @param {"cat"|"sleepbunny"} characterId
+   * @param {number} health
+   * @returns {number}
+   */
+  function stageScaleForHealth(characterId, health) {
+    const parsed = Number(health);
+    const h = Number.isFinite(parsed)
+      ? Math.max(0, Math.min(100, parsed))
+      : 100;
+    let stepsFromStage1 = 0;
+    if (characterId === "cat") {
+      if (h >= 95) stepsFromStage1 = 0;
+      else if (h >= 80) stepsFromStage1 = 1;
+      else if (h >= 65) stepsFromStage1 = 2;
+      else if (h >= 50) stepsFromStage1 = 3;
+      else if (h >= 35) stepsFromStage1 = 4;
+      else if (h >= 20) stepsFromStage1 = 5;
+      else stepsFromStage1 = 6;
+    } else if (h >= 80) stepsFromStage1 = 0;
+    else if (h >= 60) stepsFromStage1 = 1;
+    else if (h >= 40) stepsFromStage1 = 2;
+    else if (h >= 20) stepsFromStage1 = 3;
+    else stepsFromStage1 = 4;
+    return STAGE_SIZE_FACTOR ** stepsFromStage1;
+  }
 
   /**
    * Moon Buddy stages 1–5 (even 20-point bands). Matches website.
@@ -142,6 +174,33 @@
           bottom: auto;
           animation: focus-buddy-fall 1.8s cubic-bezier(0.15, 0.05, 0.25, 1) forwards;
         }
+        .chat-bubble {
+          position: fixed;
+          left: 148px;
+          bottom: 36px;
+          max-width: 240px;
+          padding: 10px 12px;
+          border-radius: 16px 16px 16px 4px;
+          background: #f7efd8;
+          color: #2a186b;
+          font: 14px/1.35 "Trebuchet MS", sans-serif;
+          box-shadow: 0 10px 24px rgba(42, 24, 107, 0.22);
+          pointer-events: auto;
+          cursor: pointer;
+          z-index: 2147483647;
+        }
+        .chat-bubble[hidden] {
+          display: none !important;
+        }
+        .chat-bubble .from {
+          margin: 0 0 4px;
+          font-size: 12px;
+          color: #646ca6;
+        }
+        .chat-bubble .text {
+          margin: 0;
+          word-wrap: break-word;
+        }
         @keyframes focus-buddy-fall {
           0% {
             transform: translateY(-156px);
@@ -158,6 +217,10 @@
         }
       </style>
       <img alt="Focus Buddy" />
+      <div class="chat-bubble" hidden>
+        <p class="from"></p>
+        <p class="text"></p>
+      </div>
     `;
     const mount = document.documentElement || document.body;
     mount.appendChild(host);
@@ -190,8 +253,16 @@
   function applyBuddyVisual(payload) {
     const img = getImg();
     if (img) {
+      const characterId =
+        payload?.characterId === "cat" ? "cat" : "sleepbunny";
+      const health = Number(payload?.characterHealth);
+      const safeHealth = Number.isFinite(health) ? health : 100;
       const file = resolveBuddyFile(payload);
+      const scale = stageScaleForHealth(characterId, safeHealth);
+      const size = Math.round(OVERLAY_BASE_SIZE_PX * scale);
       img.src = extensionUrl(file);
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
     }
     // Always notify the page — health sync must not depend on the overlay host.
     notifyPageHealth(payload);
@@ -199,6 +270,7 @@
 
   function showOverlay(animate, payload) {
     const host = ensureHost();
+    host.dataset.lockIn = "1";
     const img = host.shadowRoot?.querySelector("img");
     if (!img) return;
 
@@ -241,8 +313,68 @@
     );
   }
 
+  let chatBubbleTimer = null;
+  let lastBubbleId = "";
+
+  function dismissChatBubble(removeIfIdle) {
+    const host = document.getElementById(HOST_ID);
+    const bubble = host?.shadowRoot?.querySelector(".chat-bubble");
+    if (bubble) bubble.hidden = true;
+    if (host) delete host.dataset.chatBubble;
+    if (chatBubbleTimer) {
+      clearTimeout(chatBubbleTimer);
+      chatBubbleTimer = null;
+    }
+    if (removeIfIdle && host && host.dataset.lockIn !== "1") {
+      host.remove();
+    }
+  }
+
+  function showChatBubble(payload) {
+    const messageId = String(payload?.messageId || "");
+    const text = String(payload?.text || "").trim();
+    if (!text || (messageId && messageId === lastBubbleId)) return;
+    lastBubbleId = messageId;
+
+    const host = ensureHost();
+    host.dataset.chatBubble = "1";
+    const img = host.shadowRoot?.querySelector("img");
+    const bubble = host.shadowRoot?.querySelector(".chat-bubble");
+    const fromEl = host.shadowRoot?.querySelector(".chat-bubble .from");
+    const textEl = host.shadowRoot?.querySelector(".chat-bubble .text");
+    if (img && !img.classList.contains("fall") && !img.classList.contains("rest")) {
+      img.classList.add("rest");
+    }
+    if (img && !img.getAttribute("src")) {
+      try {
+        chrome.runtime.sendMessage({ type: "GET_BUDDY_VISUAL" }, (response) => {
+          if (chrome.runtime.lastError || !response) {
+            img.src = extensionUrl(moonFileForHealth(100));
+            return;
+          }
+          applyBuddyVisual(response);
+        });
+      } catch {
+        img.src = extensionUrl(moonFileForHealth(100));
+      }
+    }
+    if (fromEl) fromEl.textContent = `@${payload?.fromUsername || "friend"}`;
+    if (textEl) textEl.textContent = text;
+    if (bubble) {
+      bubble.hidden = false;
+      bubble.onclick = () => dismissChatBubble(true);
+    }
+    if (chatBubbleTimer) clearTimeout(chatBubbleTimer);
+    chatBubbleTimer = setTimeout(() => dismissChatBubble(true), 14000);
+  }
+
   function hideOverlay() {
-    document.getElementById(HOST_ID)?.remove();
+    const host = document.getElementById(HOST_ID);
+    if (host?.dataset.chatBubble === "1") {
+      host.dataset.lockIn = "0";
+      return;
+    }
+    host?.remove();
   }
 
   function syncSelectedCharacterFromPage(characterId) {
@@ -280,6 +412,8 @@
           showOverlay(false, message);
         } else if (message.type === "OVERLAY_HIDE") {
           hideOverlay();
+        } else if (message.type === "CHAT_BUBBLE") {
+          showChatBubble(message);
         } else if (
           message.type === "BUDDY_VISUAL" ||
           message.type === "OVERLAY_MOOD" ||
