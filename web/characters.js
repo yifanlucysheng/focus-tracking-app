@@ -1,13 +1,13 @@
 export const CHARACTERS = {
   cat: {
-    src: "../cat.png",
+    src: "/cat.png",
     alt: "Cat buddy",
     name: "Cat Buddy",
     blurb:
       "Your ordinary house cat. Cat Buddy treats every assignment like a sunbeam: sit still, stay close, and will be very VERY upset if you wander off to a distracting tab.",
   },
   sleepbunny: {
-    src: "../moonbuddysprites/stage1moon/yaybunny.png",
+    src: "/moon1.png",
     alt: "Moon buddy",
     name: "Moon Buddy",
     blurb:

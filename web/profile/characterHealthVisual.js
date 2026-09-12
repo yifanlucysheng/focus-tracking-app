@@ -4,12 +4,12 @@
  * Cat Buddy (7 levels). Session starts at 100 (cat.png).
  * 100 → cat.png … 0 → cat7.png
  *
- * Moon Buddy (5 levels from moonbuddysprites). Session starts at 100 → stage 1.
- * 80–100 → stage1 / yaybunny
- * 60–79  → stage2 / sleepbunny
- * 40–59  → stage3
- * 20–39  → stage4
- * 0–19   → stage5 / gravestone
+ * Moon Buddy (5 levels). Session starts at 100 → moon1.
+ * 80–100 → moon1.png (stage 1 / yaybunny)
+ * 60–79  → moon2.png (stage 2 / sleepbunny)
+ * 40–59  → moon3.png
+ * 20–39  → moon4.png
+ * 0–19   → moon5.png (gravestone)
  *
  * Progression during lock-in:
  * - 1 minute on-task → next happier stage
@@ -26,11 +26,11 @@ export const HEALTH_STAGE_VALUES = [100, 80, 65, 50, 35, 20, 0];
 export const MOON_HEALTH_THRESHOLDS = [80, 60, 40, 20, 0];
 
 const MOON_STAGE_FILES = [
-  "../moonbuddysprites/stage1moon/yaybunny.png",
-  "../moonbuddysprites/stage2moon/sleepbunny.png",
-  "../moonbuddysprites/stage3moon/stage3.png",
-  "../moonbuddysprites/stage4moon/stage4bunny.png",
-  "../moonbuddysprites/stage5moon/gravestone.png",
+  "/moon1.png",
+  "/moon2.png",
+  "/moon3.png",
+  "/moon4.png",
+  "/moon5.png",
 ];
 
 /** Health at the start of every lock-in session. */
@@ -81,8 +81,8 @@ export function healthForStage(stage) {
  */
 export function catBuddySrcForHealth(health) {
   const stage = characterHealthStage(health);
-  if (stage <= 0) return "../cat.png";
-  return `../cat${stage + 1}.png`;
+  if (stage <= 0) return "/cat.png";
+  return `/cat${stage + 1}.png`;
 }
 
 /**
