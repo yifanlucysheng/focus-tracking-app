@@ -25,6 +25,11 @@ const REQUIRED_FILES = [
   "logo.PNG",
   "sleepbunny.png",
   "angrybunny.png",
+  "moon1.png",
+  "moon2.png",
+  "moon3.png",
+  "moon4.png",
+  "moon5.png",
   "cat.png",
   "cat2.png",
   "cat3.png",
@@ -79,6 +84,11 @@ copyFile("site-bridge.js");
 copyFile("logo.PNG");
 copyFile("sleepbunny.png");
 copyFile("angrybunny.png");
+copyFile("moon1.png");
+copyFile("moon2.png");
+copyFile("moon3.png");
+copyFile("moon4.png");
+copyFile("moon5.png");
 copyFile("cat.png");
 copyFile("cat2.png");
 copyFile("cat3.png");

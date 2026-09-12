@@ -155,8 +155,7 @@ function setCharacterMood(status) {
   // Mood-only fallback while waiting for the full visual resolve.
   applyBuddyVisual({
     mood: status === "distracted" ? "distracted" : "on-task",
-    buddyFile:
-      status === "distracted" ? "angrybunny.png" : "sleepbunny.png",
+    buddyFile: "moon1.png",
   });
   refreshBuddyVisual();
 }

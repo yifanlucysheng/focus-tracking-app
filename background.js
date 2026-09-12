@@ -64,8 +64,9 @@ const CHARACTER_HEALTH_KEY = "characterHealth";
 const SELECTED_CHARACTER_KEY = "focusBuddy.selectedCharacter";
 const HEALTH_PROGRESS_KEY = "healthProgressState";
 const HEALTH_ALARM = "focus-health-tick";
-/** Session starts at 95 HP (cat.png). */
+/** Session starts at 95 HP (cat.png); can heal up to 100 while on-task. */
 const SESSION_START_HEALTH = 95;
+const SESSION_MAX_HEALTH = 100;
 const HEALTH_STAGE_VALUES = [95, 80, 65, 50, 35, 20, 0];
 /** 1 second distracted → −1 health. */
 const OFF_TASK_STEP_MS = 1_000;
@@ -127,10 +128,32 @@ function catFileForHealth(health) {
   return `cat${stage + 1}.png`;
 }
 
+/**
+ * Moon Buddy stages 1–5 (even 20-point bands). Stage 1 = healthiest.
+ * @param {number} health
+ * @returns {string}
+ */
+function moonFileForHealth(health) {
+  const parsed = Number(health);
+  const h = Number.isFinite(parsed)
+    ? Math.max(0, Math.min(100, parsed))
+    : SESSION_START_HEALTH;
+  if (h >= 80) return "moon1.png";
+  if (h >= 60) return "moon2.png";
+  if (h >= 40) return "moon3.png";
+  if (h >= 20) return "moon4.png";
+  return "moon5.png";
+}
+
+function buddyFileForCharacter(characterId, health) {
+  if (characterId === "cat") return catFileForHealth(health);
+  return moonFileForHealth(health);
+}
+
 function clampSessionHealth(health) {
   const n = Number(health);
   const value = Number.isFinite(n) ? n : SESSION_START_HEALTH;
-  return Math.max(0, Math.min(SESSION_START_HEALTH, Math.floor(value)));
+  return Math.max(0, Math.min(SESSION_MAX_HEALTH, Math.floor(value)));
 }
 
 function setSessionHealth(health) {
@@ -171,12 +194,7 @@ async function resolveBuddyVisual() {
     characterHealth = sessionCharacterHealth;
   }
 
-  const buddyFile =
-    characterId === "cat"
-      ? catFileForHealth(characterHealth)
-      : mood === "distracted"
-        ? "angrybunny.png"
-        : "sleepbunny.png";
+  const buddyFile = buddyFileForCharacter(characterId, characterHealth);
 
   return {
     characterId,
@@ -326,7 +344,7 @@ async function tickSessionHealth() {
       return;
     }
     healthProgress.accruedMs -= steps * ON_TASK_STEP_MS;
-    next = Math.min(SESSION_START_HEALTH, sessionCharacterHealth + steps);
+    next = Math.min(SESSION_MAX_HEALTH, sessionCharacterHealth + steps);
   } else if (healthProgress.status === "distracted") {
     const steps = Math.floor(healthProgress.accruedMs / OFF_TASK_STEP_MS);
     if (steps < 1) {
@@ -343,6 +361,15 @@ async function tickSessionHealth() {
   void persistHealthProgress();
   if (next === sessionCharacterHealth) return;
   setSessionHealth(next);
+  // Persist HP before broadcasting so a concurrent classify can't read a stale value.
+  try {
+    await chrome.storage.local.set({
+      [CHARACTER_HEALTH_KEY]: sessionCharacterHealth,
+      liveSessionActive: true,
+    });
+  } catch {
+    // Best-effort.
+  }
   await pushLiveCharacterHealth(sessionCharacterHealth, {
     liveSessionActive: true,
     force: true,
@@ -739,10 +766,7 @@ async function broadcastCharacterHealthToTabs(health, liveSessionActive) {
     typeof health === "number" && Number.isFinite(health)
       ? clampSessionHealth(health)
       : visual.characterHealth;
-  const buddyFile =
-    visual.characterId === "cat"
-      ? catFileForHealth(characterHealth)
-      : visual.buddyFile;
+  const buddyFile = buddyFileForCharacter(visual.characterId, characterHealth);
 
   try {
     const tabs = await chrome.tabs.query({});
@@ -955,16 +979,122 @@ async function cancelTimer() {
   });
 }
 
+/** Tiny / filler words that must never mark a tab on-task by themselves. */
+const TASK_KEYWORD_STOPWORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "but",
+  "if",
+  "to",
+  "of",
+  "in",
+  "on",
+  "at",
+  "by",
+  "for",
+  "as",
+  "is",
+  "it",
+  "its",
+  "my",
+  "me",
+  "we",
+  "us",
+  "am",
+  "be",
+  "do",
+  "did",
+  "does",
+  "so",
+  "up",
+  "no",
+  "yes",
+  "not",
+  "can",
+  "all",
+  "any",
+  "our",
+  "out",
+  "get",
+  "got",
+  "has",
+  "had",
+  "have",
+  "him",
+  "his",
+  "her",
+  "she",
+  "you",
+  "your",
+  "with",
+  "from",
+  "this",
+  "that",
+  "into",
+  "over",
+  "then",
+  "than",
+  "too",
+  "very",
+  "just",
+  "about",
+  "task",
+  "focus",
+  "please",
+  "today",
+  "tonight",
+  "something",
+  "stuff",
+]);
+
 function extractKeywords(taskText) {
-  return [...new Set(
-    String(taskText)
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((word) => word.length >= 2)
-  )];
+  return [
+    ...new Set(
+      String(taskText)
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(
+          (word) => word.length >= 3 && !TASK_KEYWORD_STOPWORDS.has(word)
+        )
+    ),
+  ];
 }
 
+/**
+ * Match whole tokens only — substring includes("to") was matching youtube.com etc.
+ * @param {string} haystack
+ * @returns {'on-task'|null}
+ */
+function classifyByKeywords(haystack) {
+  if (taskKeywords.length === 0) return null;
+  const tokens = new Set(
+    String(haystack || "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+  );
+  return taskKeywords.some((keyword) => tokens.has(keyword)) ? "on-task" : null;
+}
+
+/**
+ * Lightweight keyword + lock-in flag refresh for classifyTab.
+ * Must NOT restore HP / progress — that raced with ticks and snapped health back up.
+ */
 async function loadKeywords() {
+  const result = await chrome.storage.local.get([KEYWORDS_KEY, LOCK_IN_KEY]);
+  taskKeywords = Array.isArray(result[KEYWORDS_KEY])
+    ? result[KEYWORDS_KEY]
+    : [];
+  lockInActive = Boolean(result[LOCK_IN_KEY]);
+}
+
+/**
+ * Full hydrate after SW wake or extension boot (not on every tab classify).
+ */
+async function hydrateLockInStateFromStorage() {
   const result = await chrome.storage.local.get([
     KEYWORDS_KEY,
     LOCK_IN_KEY,
@@ -973,19 +1103,21 @@ async function loadKeywords() {
   taskKeywords = Array.isArray(result[KEYWORDS_KEY])
     ? result[KEYWORDS_KEY]
     : [];
-  lockInActive = Boolean(result[LOCK_IN_KEY]);
+  const nextActive = Boolean(result[LOCK_IN_KEY]);
+  lockInActive = nextActive;
+  if (!nextActive) {
+    stopLiveHealthTicker();
+    return;
+  }
   const rawHealth = Number(result[CHARACTER_HEALTH_KEY]);
   if (Number.isFinite(rawHealth)) {
     setSessionHealth(rawHealth);
   }
-  if (lockInActive) {
-    await restoreHealthProgress();
-    // If status was lost, reclassify the active tab so ticks can resume.
-    if (!healthProgress?.status) {
-      void evaluateActiveTab();
-    }
-    startLiveHealthTicker();
+  await restoreHealthProgress();
+  if (!healthProgress?.status) {
+    void evaluateActiveTab();
   }
+  startLiveHealthTicker();
 }
 
 async function saveKeywords(keywords) {
@@ -1150,13 +1282,6 @@ async function ensureDefaultAllowSites() {
   await chrome.storage.local.set({
     [ALLOW_SITES_KEY]: ["https://docs.google.com"],
   });
-}
-
-function classifyByKeywords(haystack) {
-  if (taskKeywords.length === 0) return null;
-  return taskKeywords.some((keyword) => haystack.includes(keyword))
-    ? "on-task"
-    : null;
 }
 
 function parseGeminiRelated(payload) {
@@ -1413,6 +1538,7 @@ async function stopLockIn() {
 loadKeywords();
 readTimer();
 void ensureDefaultAllowSites();
+void hydrateLockInStateFromStorage();
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === HEALTH_ALARM) {

@@ -4,8 +4,8 @@ export const CHARACTERS = {
     alt: "Cat buddy",
   },
   sleepbunny: {
-    src: "/sleepbunny.png",
-    alt: "Sleep bunny buddy",
+    src: "/moon1.png",
+    alt: "Moon buddy",
   },
 };
 
