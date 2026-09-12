@@ -8,6 +8,16 @@
     <div id="task-section"></div>
     <div id="timer-section">
       <div id="timer-display">25:00</div>
+      <div class="duration-picker">
+        <label>
+          <input id="duration-minutes" type="number" min="0" max="180" value="25" />
+          min
+        </label>
+        <label>
+          <input id="duration-seconds" type="number" min="0" max="59" value="0" />
+          sec
+        </label>
+      </div>
       <div class="timer-controls">
         <button id="start-task-btn" type="button">Start Focus</button>
         <button id="pause-timer-btn" type="button" disabled>Pause</button>

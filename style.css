@@ -29,6 +29,31 @@ body {
   margin-bottom: 12px;
 }
 
+.duration-picker {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.duration-picker label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.duration-picker input {
+  width: 64px;
+  box-sizing: border-box;
+  border: 1px solid #d5d9e0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
 .timer-controls {
   display: flex;
   flex-wrap: wrap;
