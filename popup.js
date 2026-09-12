@@ -5,6 +5,7 @@ const timerDisplay = document.getElementById("timer-display");
 const startBtn = document.getElementById("start-task-btn");
 const pauseBtn = document.getElementById("pause-timer-btn");
 const cancelBtn = document.getElementById("cancel-timer-btn");
+const hoursInput = document.getElementById("duration-hours");
 const minutesInput = document.getElementById("duration-minutes");
 const secondsInput = document.getElementById("duration-seconds");
 const characterImg = document.getElementById("character-img");
@@ -54,21 +55,27 @@ function openTaskTabs() {
 
 function formatTime(totalSeconds) {
   const safe = Math.max(0, totalSeconds);
-  const minutes = Math.floor(safe / 60);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
   const seconds = safe % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function durationFromInputs() {
+  const hours = Number(hoursInput?.value ?? 0);
   const minutes = Number(minutesInput?.value ?? 0);
   const seconds = Number(secondsInput?.value ?? 0);
-  const total = Math.floor(minutes) * 60 + Math.floor(seconds);
+  const total = Math.floor(hours) * 3600 + Math.floor(minutes) * 60 + Math.floor(seconds);
   return Math.max(1, total);
 }
 
 function setDurationInputs(totalSeconds) {
   const safe = Math.max(1, totalSeconds);
-  if (minutesInput) minutesInput.value = String(Math.floor(safe / 60));
+  if (hoursInput) hoursInput.value = String(Math.floor(safe / 3600));
+  if (minutesInput) minutesInput.value = String(Math.floor((safe % 3600) / 60));
   if (secondsInput) secondsInput.value = String(safe % 60);
 }
 
@@ -88,6 +95,7 @@ function setControls(state) {
   cancelBtn.disabled = !running && !paused && state.status !== "finished";
   pauseBtn.textContent = paused ? "Resume" : "Pause";
   const lockDuration = running || paused;
+  if (hoursInput) hoursInput.disabled = lockDuration;
   if (minutesInput) minutesInput.disabled = lockDuration;
   if (secondsInput) secondsInput.disabled = lockDuration;
 }
