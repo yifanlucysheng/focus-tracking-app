@@ -128,6 +128,28 @@ function catFileForHealth(health) {
   return `cat${stage + 1}.png`;
 }
 
+/**
+ * Moon Buddy stages 1–5 (even 20-point bands). Stage 1 = healthiest.
+ * @param {number} health
+ * @returns {string}
+ */
+function moonFileForHealth(health) {
+  const parsed = Number(health);
+  const h = Number.isFinite(parsed)
+    ? Math.max(0, Math.min(100, parsed))
+    : SESSION_START_HEALTH;
+  if (h >= 80) return "moon1.png";
+  if (h >= 60) return "moon2.png";
+  if (h >= 40) return "moon3.png";
+  if (h >= 20) return "moon4.png";
+  return "moon5.png";
+}
+
+function buddyFileForCharacter(characterId, health) {
+  if (characterId === "cat") return catFileForHealth(health);
+  return moonFileForHealth(health);
+}
+
 function clampSessionHealth(health) {
   const n = Number(health);
   const value = Number.isFinite(n) ? n : SESSION_START_HEALTH;
@@ -172,12 +194,7 @@ async function resolveBuddyVisual() {
     characterHealth = sessionCharacterHealth;
   }
 
-  const buddyFile =
-    characterId === "cat"
-      ? catFileForHealth(characterHealth)
-      : mood === "distracted"
-        ? "angrybunny.png"
-        : "sleepbunny.png";
+  const buddyFile = buddyFileForCharacter(characterId, characterHealth);
 
   return {
     characterId,
@@ -740,10 +757,7 @@ async function broadcastCharacterHealthToTabs(health, liveSessionActive) {
     typeof health === "number" && Number.isFinite(health)
       ? clampSessionHealth(health)
       : visual.characterHealth;
-  const buddyFile =
-    visual.characterId === "cat"
-      ? catFileForHealth(characterHealth)
-      : visual.buddyFile;
+  const buddyFile = buddyFileForCharacter(visual.characterId, characterHealth);
 
   try {
     const tabs = await chrome.tabs.query({});

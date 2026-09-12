@@ -7,8 +7,8 @@ export const CHARACTERS = {
       "Your ordinary house cat. Cat Buddy treats every assignment like a sunbeam: sit still, stay close, and will be very VERY upset if you wander off to a distracting tab.",
   },
   sleepbunny: {
-    src: "../sleepbunny.png",
-    alt: "Sleep bunny buddy",
+    src: "../moon1.png",
+    alt: "Moon buddy",
     name: "Moon Buddy",
     blurb:
       "Spun from moondust on another planet's moon, then drifted here on a sleepy comet. Moon Buddy dozes beside your work so your focus has somewhere quiet and glowing to land.",

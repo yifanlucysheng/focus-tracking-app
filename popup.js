@@ -124,16 +124,28 @@ function getEntryStatus(entry) {
   return null;
 }
 
+function isStageBuddyFile(file, characterId) {
+  if (typeof file !== "string" || !file) return false;
+  const name = file.split("/").pop() || file;
+  if (characterId === "cat") {
+    return name === "cat.png" || /^cat[2-7]\.png$/i.test(name);
+  }
+  return /^moon[1-5]\.png$/i.test(name);
+}
+
 function applyBuddyVisual(visual) {
   if (!characterImg || !visual) return;
   const mood = visual.mood === "distracted" ? "distracted" : "on-task";
   const isOnTask = mood !== "distracted";
+  const characterId = visual.characterId === "cat" ? "cat" : "sleepbunny";
   characterImg.classList.remove("on-task", "distracted");
   characterImg.classList.toggle("on-task", isOnTask);
   characterImg.classList.toggle("distracted", !isOnTask);
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
   characterImg.alt = isOnTask ? "on-task" : "distracted";
-  if (visual.buddyFile) characterImg.src = visual.buddyFile;
+  if (isStageBuddyFile(visual.buddyFile, characterId)) {
+    characterImg.src = String(visual.buddyFile).split("/").pop();
+  }
 }
 
 function refreshBuddyVisual() {
@@ -143,10 +155,12 @@ function refreshBuddyVisual() {
 }
 
 function setCharacterMood(status) {
-  applyBuddyVisual({
-    mood: status === "distracted" ? "distracted" : "on-task",
-    buddyFile: status === "distracted" ? "angrybunny.png" : "sleepbunny.png",
-  });
+  // Mood class only — sprite always comes from health stages via GET_BUDDY_VISUAL.
+  if (characterImg) {
+    const isOnTask = status !== "distracted";
+    characterImg.classList.toggle("on-task", isOnTask);
+    characterImg.classList.toggle("distracted", !isOnTask);
+  }
   refreshBuddyVisual();
 }
 

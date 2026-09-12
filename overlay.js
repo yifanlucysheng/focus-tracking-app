@@ -5,8 +5,8 @@
     return;
   }
 
-  // Bump so re-inject replaces older overlay copies that crashed on chrome.storage.
-  const OVERLAY_VERSION = 11;
+  // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
+  const OVERLAY_VERSION = 12;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
@@ -43,22 +43,48 @@
     return "cat7.png";
   }
 
-  function bunnyFileForMood(mood) {
-    return mood === "distracted" ? "angrybunny.png" : "sleepbunny.png";
+  /**
+   * Moon Buddy stages 1–5 (even 20-point bands). Matches website.
+   * @param {number} health
+   * @returns {string}
+   */
+  function moonFileForHealth(health) {
+    const parsed = Number(health);
+    const h = Number.isFinite(parsed)
+      ? Math.max(0, Math.min(100, parsed))
+      : 95;
+    if (h >= 80) return "moon1.png";
+    if (h >= 60) return "moon2.png";
+    if (h >= 40) return "moon3.png";
+    if (h >= 20) return "moon4.png";
+    return "moon5.png";
+  }
+
+  /**
+   * Accept only stage sprites. Legacy sleepbunny/angrybunny must not win over health stages.
+   * @param {string|null|undefined} file
+   * @param {"cat"|"sleepbunny"} characterId
+   * @returns {boolean}
+   */
+  function isStageBuddyFile(file, characterId) {
+    if (typeof file !== "string" || !file) return false;
+    const name = file.split("/").pop() || file;
+    if (characterId === "cat") {
+      return name === "cat.png" || /^cat[2-7]\.png$/i.test(name);
+    }
+    return /^moon[1-5]\.png$/i.test(name);
   }
 
   function resolveBuddyFile(payload) {
-    if (payload?.buddyFile && typeof payload.buddyFile === "string") {
-      return payload.buddyFile;
-    }
     const characterId =
       payload?.characterId === "cat" ? "cat" : "sleepbunny";
-    const mood =
-      payload?.mood === "distracted" ? "distracted" : "on-task";
     const health = Number(payload?.characterHealth);
     const safeHealth = Number.isFinite(health) ? health : 95;
+    if (isStageBuddyFile(payload?.buddyFile, characterId)) {
+      return String(payload.buddyFile).split("/").pop();
+    }
     if (characterId === "cat") return catFileForHealth(safeHealth);
-    return bunnyFileForMood(mood);
+    return moonFileForHealth(safeHealth);
   }
 
   function getImg() {
@@ -127,10 +153,7 @@
     const health = Number(payload?.characterHealth);
     const live = Boolean(payload?.liveSessionActive);
     const safeHealth = Number.isFinite(health) ? health : 95;
-    const file =
-      typeof payload?.buddyFile === "string"
-        ? payload.buddyFile
-        : resolveBuddyFile(payload);
+    const file = resolveBuddyFile(payload);
     try {
       window.postMessage(
         {
@@ -167,7 +190,7 @@
     if (payload?.buddyFile || payload?.characterId) {
       applyBuddyVisual(payload);
     } else {
-      img.src = extensionUrl(bunnyFileForMood(payload?.mood));
+      img.src = extensionUrl(moonFileForHealth(95));
       try {
         chrome.runtime.sendMessage({ type: "GET_BUDDY_VISUAL" }, (response) => {
           if (chrome.runtime.lastError || !response) return;

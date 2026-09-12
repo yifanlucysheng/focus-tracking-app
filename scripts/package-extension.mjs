@@ -23,8 +23,11 @@ const REQUIRED_FILES = [
   "overlay.js",
   "site-bridge.js",
   "logo.PNG",
-  "sleepbunny.png",
-  "angrybunny.png",
+  "moon1.png",
+  "moon2.png",
+  "moon3.png",
+  "moon4.png",
+  "moon5.png",
   "cat.png",
   "cat2.png",
   "cat3.png",
@@ -62,13 +65,13 @@ fs.mkdirSync(outDir, { recursive: true });
 const manifest = JSON.parse(
   fs.readFileSync(path.join(root, "manifest.json"), "utf8")
 );
-if (manifest?.background?.service_worker !== "service-worker.js") {
-  throw new Error(
-    `manifest background.service_worker must be service-worker.js (got ${manifest?.background?.service_worker})`
-  );
-}
+// Packaged extension always runs the inlined service-worker.js build.
+manifest.background = { service_worker: "service-worker.js" };
+fs.writeFileSync(
+  path.join(outDir, "manifest.json"),
+  `${JSON.stringify(manifest, null, 2)}\n`
+);
 
-copyFile("manifest.json");
 copyFile("service-worker.js");
 copyFile("popup.html");
 copyFile("popup.js");
@@ -77,15 +80,19 @@ copyFile("style.css");
 copyFile("overlay.js");
 copyFile("site-bridge.js");
 copyFile("logo.PNG");
-copyFile("sleepbunny.png");
-copyFile("angrybunny.png");
-copyFile("cat.png");
-copyFile("cat2.png");
-copyFile("cat3.png");
-copyFile("cat4.png");
-copyFile("cat5.png");
-copyFile("cat6.png");
-copyFile("cat7.png");
+// Website assets/ are the source of truth for buddy stage sprites.
+copyFile("assets/moon1.png", "moon1.png");
+copyFile("assets/moon2.png", "moon2.png");
+copyFile("assets/moon3.png", "moon3.png");
+copyFile("assets/moon4.png", "moon4.png");
+copyFile("assets/moon5.png", "moon5.png");
+copyFile("assets/cat.png", "cat.png");
+copyFile("assets/cat2.png", "cat2.png");
+copyFile("assets/cat3.png", "cat3.png");
+copyFile("assets/cat4.png", "cat4.png");
+copyFile("assets/cat5.png", "cat5.png");
+copyFile("assets/cat6.png", "cat6.png");
+copyFile("assets/cat7.png", "cat7.png");
 
 // secrets: prefer real local secrets; fall back to example so the SW can load
 const secretsSrc = path.join(root, "secrets.local.js");
@@ -128,7 +135,7 @@ if (!/importScripts\(\s*["']secrets\.local\.js["']\s*\)/.test(sw)) {
 
 // 5) Verify popup script tags resolve
 const popup = fs.readFileSync(path.join(outDir, "popup.html"), "utf8");
-for (const src of ["popup-auth.js", "popup.js", "style.css"]) {
+for (const src of ["popup.js", "style.css"]) {
   if (!popup.includes(src)) {
     throw new Error(`popup.html does not reference ${src}`);
   }

@@ -33353,6 +33353,7 @@ re2js/build/index.js:
 */
 
 const KEYWORDS_KEY = "taskKeywords";
+const LABELS_KEY = "labelLibrary";
 const FOCUS_LOG_KEY = "focusLog";
 const MOOD_KEY = "characterMood";
 const LOCK_IN_KEY = "lockInActive";
@@ -33481,6 +33482,28 @@ function catFileForHealth(health) {
   return `cat${stage + 1}.png`;
 }
 
+/**
+ * Moon Buddy stages 1–5 (even 20-point bands). Stage 1 = healthiest.
+ * @param {number} health
+ * @returns {string}
+ */
+function moonFileForHealth(health) {
+  const parsed = Number(health);
+  const h = Number.isFinite(parsed)
+    ? Math.max(0, Math.min(100, parsed))
+    : SESSION_START_HEALTH;
+  if (h >= 80) return "moon1.png";
+  if (h >= 60) return "moon2.png";
+  if (h >= 40) return "moon3.png";
+  if (h >= 20) return "moon4.png";
+  return "moon5.png";
+}
+
+function buddyFileForCharacter(characterId, health) {
+  if (characterId === "cat") return catFileForHealth(health);
+  return moonFileForHealth(health);
+}
+
 function clampSessionHealth(health) {
   const n = Number(health);
   const value = Number.isFinite(n) ? n : SESSION_START_HEALTH;
@@ -33525,12 +33548,7 @@ async function resolveBuddyVisual() {
     characterHealth = sessionCharacterHealth;
   }
 
-  const buddyFile =
-    characterId === "cat"
-      ? catFileForHealth(characterHealth)
-      : mood === "distracted"
-        ? "angrybunny.png"
-        : "sleepbunny.png";
+  const buddyFile = buddyFileForCharacter(characterId, characterHealth);
 
   return {
     characterId,
@@ -34093,10 +34111,7 @@ async function broadcastCharacterHealthToTabs(health, liveSessionActive) {
     typeof health === "number" && Number.isFinite(health)
       ? clampSessionHealth(health)
       : visual.characterHealth;
-  const buddyFile =
-    visual.characterId === "cat"
-      ? catFileForHealth(characterHealth)
-      : visual.buddyFile;
+  const buddyFile = buddyFileForCharacter(visual.characterId, characterHealth);
 
   try {
     const tabs = await chrome.tabs.query({});
@@ -34308,6 +34323,180 @@ async function cancelTimer() {
     status: "idle",
   });
 }
+
+const STARTER_LIBRARY = {
+  seeded: true,
+  labels: [
+    { id: "math", name: "Math" },
+    { id: "chemistry", name: "Chemistry" },
+    { id: "history", name: "History" },
+  ],
+  sites: [
+    { url: "https://www.khanacademy.org/math", title: "Khan Academy Math", labelIds: ["math"] },
+    { url: "https://www.desmos.com/calculator", title: "Desmos", labelIds: ["math"] },
+    { url: "https://www.wolframalpha.com/", title: "Wolfram Alpha", labelIds: ["math"] },
+    { url: "https://www.chemguide.co.uk/", title: "Chemguide", labelIds: ["chemistry"] },
+    { url: "https://ptable.com/", title: "Periodic Table", labelIds: ["chemistry"] },
+    { url: "https://www.khanacademy.org/science/chemistry", title: "Khan Academy Chemistry", labelIds: ["chemistry"] },
+    { url: "https://www.khanacademy.org/humanities/world-history", title: "Khan Academy World History", labelIds: ["history"] },
+    { url: "https://www.britannica.com/", title: "Britannica", labelIds: ["history"] },
+    { url: "https://www.sparknotes.com/history/", title: "SparkNotes History", labelIds: ["history"] },
+  ],
+};
+
+function normalizeSiteUrl(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function labelIdFromName(name, existingIds) {
+  const base = String(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "label";
+  let id = base;
+  let n = 2;
+  while (existingIds.includes(id)) {
+    id = `${base}-${n}`;
+    n += 1;
+  }
+  return id;
+}
+
+async function loadLibrary() {
+  const result = await chrome.storage.local.get(LABELS_KEY);
+  const stored = result[LABELS_KEY];
+  if (stored && Array.isArray(stored.labels) && Array.isArray(stored.sites)) {
+    return stored;
+  }
+  await chrome.storage.local.set({ [LABELS_KEY]: STARTER_LIBRARY });
+  return STARTER_LIBRARY;
+}
+
+async function saveLibrary(library) {
+  await chrome.storage.local.set({ [LABELS_KEY]: library });
+  return library;
+}
+
+function urlsForLabel(library, labelId) {
+  return [...new Set(
+    library.sites
+      .filter((site) => site.labelIds.includes(labelId))
+      .map((site) => site.url)
+  )];
+}
+
+function labelsMatchingTask(library, taskText) {
+  const hay = String(taskText || "").toLowerCase();
+  if (!hay) return [];
+  return library.labels.filter((label) => {
+    const name = label.name.toLowerCase();
+    return hay === name || hay.includes(name);
+  });
+}
+
+async function openUrls(urls) {
+  for (const url of urls) {
+    await chrome.tabs.create({ url, active: false });
+  }
+}
+
+async function openLabelTabs(labelId) {
+  const library = await loadLibrary();
+  const urls = urlsForLabel(library, labelId);
+  await openUrls(urls);
+  return { ok: true, count: urls.length, urls };
+}
+
+async function openTabsForTask(taskText) {
+  const library = await loadLibrary();
+  const matches = labelsMatchingTask(library, taskText);
+  const urls = [...new Set(matches.flatMap((label) => urlsForLabel(library, label.id)))];
+  await openUrls(urls);
+  return urls.length;
+}
+
+async function createLabel(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return loadLibrary();
+  const library = await loadLibrary();
+  if (library.labels.some((label) => label.name.toLowerCase() === trimmed.toLowerCase())) {
+    return library;
+  }
+  const id = labelIdFromName(trimmed, library.labels.map((label) => label.id));
+  library.labels.push({ id, name: trimmed });
+  return saveLibrary(library);
+}
+
+async function deleteLabel(labelId) {
+  const library = await loadLibrary();
+  library.labels = library.labels.filter((label) => label.id !== labelId);
+  library.sites = library.sites
+    .map((site) => ({
+      ...site,
+      labelIds: site.labelIds.filter((id) => id !== labelId),
+    }))
+    .filter((site) => site.labelIds.length > 0);
+  return saveLibrary(library);
+}
+
+async function saveSite({ url, title, labelIds }) {
+  const normalized = normalizeSiteUrl(url);
+  const ids = Array.isArray(labelIds) ? [...new Set(labelIds.filter(Boolean))] : [];
+  if (!normalized || ids.length === 0) return loadLibrary();
+
+  const library = await loadLibrary();
+  const validIds = ids.filter((id) => library.labels.some((label) => label.id === id));
+  if (validIds.length === 0) return library;
+
+  const existing = library.sites.find((site) => site.url === normalized);
+  if (existing) {
+    existing.labelIds = [...new Set([...existing.labelIds, ...validIds])];
+    if (title) existing.title = title;
+  } else {
+    library.sites.push({
+      url: normalized,
+      title: String(title || normalized),
+      labelIds: validIds,
+    });
+  }
+  return saveLibrary(library);
+}
+
+function isFolderSavedSite(url, library) {
+  const normalized = normalizeSiteUrl(url);
+  if (!normalized || !library?.sites) return false;
+  return library.sites.some((site) => {
+    const saved = site.url;
+    if (!saved) return false;
+    if (normalized === saved || normalized.startsWith(saved) || saved.startsWith(normalized)) {
+      return true;
+    }
+    try {
+      const a = new URL(normalized).hostname.replace(/^www\./i, "").toLowerCase();
+      const b = new URL(saved).hostname.replace(/^www\./i, "").toLowerCase();
+      return a && a === b;
+    } catch {
+      return false;
+    }
+  });
+}
+
+async function endTimer() {
+  const stored = await chrome.storage.local.get(TIMER_KEY);
+  const current = { ...(stored[TIMER_KEY] || {}) };
+  const timer = await finishTimer(current);
+  const lock = await stopLockIn();
+  return { timer, lockInActive: false, ...lock };
+}
+
 
 function extractKeywords(taskText) {
   return [...new Set(
@@ -34625,6 +34814,10 @@ async function classifyTab(tab) {
   if (hostMatchesAnySuffix(hostname, WORK_TOOL_HOST_SUFFIXES)) {
     return "on-task";
   }
+  const folderLibrary = await loadLibrary();
+  if (isFolderSavedSite(details.url, folderLibrary)) {
+    return "on-task";
+  }
 
   const keywordHit = classifyByKeywords(details.haystack);
   if (keywordHit) return keywordHit;
@@ -34717,6 +34910,7 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
   await saveKeywords(extractKeywords(text));
   await setCharacterMood("on-task");
   clearDistractedTimer();
+  void openTabsForTask(text);
 
   // Start the countdown before cloud/overlay work so the popup timer never stalls.
   let timer = await readTimer();
@@ -34895,8 +35089,42 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "GET_LABELS") {
+    loadLibrary().then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "CREATE_LABEL") {
+    createLabel(message.name).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "DELETE_LABEL") {
+    deleteLabel(message.labelId).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "SAVE_SITE") {
+    saveSite(message).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "OPEN_LABEL") {
+    openLabelTabs(message.labelId).then(sendResponse);
+    return true;
+  }
+
   if (message.type === "START_TIMER") {
-    startTimer(message.durationSeconds).then(sendResponse);
+    startLockIn({
+      taskText: message.taskText,
+      useTimer: true,
+      durationSeconds: message.durationSeconds,
+    }).then((result) => sendResponse({ timer: result.timer, lockInActive: true }));
+    return true;
+  }
+
+  if (message.type === "END_TIMER") {
+    endTimer().then(sendResponse);
     return true;
   }
 
