@@ -1,3 +1,6 @@
+import { bootCloudSync, formatSessionClock } from "./web/session-sync.js";
+import { isCloudConfigured, listenAuth, loadFriendsActivity } from "./web/cloud.js";
+
 const LOG_POLL_MS = 10_000;
 const DEFAULT_SECONDS = 25 * 60;
 const TIMER_OPEN_KEY = "timerDropdownOpen";
@@ -12,6 +15,12 @@ const startTimerBtn = document.getElementById("start-timer-btn");
 const endTimerModal = document.getElementById("end-timer-modal");
 const killBunnyBtn = document.getElementById("kill-bunny-btn");
 const loveBunnyBtn = document.getElementById("love-bunny-btn");
+const sessionStatsModal = document.getElementById("session-stats-modal");
+const sessionStatsTask = document.getElementById("session-stats-task");
+const sessionStatsList = document.getElementById("session-stats-list");
+const sessionStatsNote = document.getElementById("session-stats-note");
+const sessionStatsCloseBtn = document.getElementById("session-stats-close-btn");
+const popupActivity = document.getElementById("popup-activity");
 const characterImg = document.getElementById("character-img");
 const lockInBtn = document.getElementById("lock-in-btn");
 const lockInHint = document.getElementById("lock-in-hint");
@@ -225,6 +234,7 @@ function deactivateLockIn() {
     setLockInUi(false);
     setCharacterMood("on-task");
     if (response?.timer) applySnapshot(response.timer);
+    maybeShowSession(response?.session);
   });
 }
 
@@ -372,6 +382,43 @@ document.getElementById("open-dashboard-btn")?.addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("web/index.html") });
 });
 
+function showSessionStats(session) {
+  if (!session || !sessionStatsModal) return;
+  if (sessionStatsTask) {
+    sessionStatsTask.textContent = session.task
+      ? `Task: ${session.task}`
+      : "No task name was set.";
+  }
+  if (sessionStatsList) {
+    sessionStatsList.innerHTML = `
+      <li>Duration: ${formatSessionClock(session.durationSeconds)}</li>
+      <li>On-task: ${session.onTaskPercent}%</li>
+      <li>Distraction switches: ${session.distractionSwitches}</li>
+    `;
+  }
+  if (sessionStatsNote) {
+    sessionStatsNote.textContent = isCloudConfigured()
+      ? "Saved to your account when you are signed in."
+      : "Saved on this device. Add Firebase keys to keep history on your account.";
+  }
+  sessionStatsModal.hidden = false;
+}
+
+function hideSessionStats() {
+  if (sessionStatsModal) sessionStatsModal.hidden = true;
+  sendMessage("CLEAR_LAST_SESSION");
+}
+
+sessionStatsCloseBtn?.addEventListener("click", hideSessionStats);
+
+function maybeShowSession(session) {
+  if (session) showSessionStats(session);
+}
+
+sendMessage("GET_LAST_SESSION", {}, (response) => {
+  maybeShowSession(response?.session);
+});
+
 function showEndTimerModal() {
   if (endTimerModal) endTimerModal.hidden = false;
 }
@@ -416,6 +463,7 @@ killBunnyBtn?.addEventListener("click", () => {
     if (timer) applySnapshot(timer);
     setLockInUi(false);
     setCharacterMood("on-task");
+    maybeShowSession(response?.session);
   });
 });
 
@@ -431,7 +479,51 @@ displayId = setInterval(() => {
   if (snapshot?.status === "running") {
     const remaining = remainingFromSnapshot();
     timerDisplay.textContent = formatTime(remaining);
-    if (remaining <= 0) refreshTimer();
+    if (remaining <= 0) {
+      refreshTimer();
+      sendMessage("GET_LAST_SESSION", {}, (response) => {
+        maybeShowSession(response?.session);
+      });
+    }
   }
 }, 250);
 logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
+
+async function refreshPopupActivity() {
+  if (!popupActivity) return;
+  if (!isCloudConfigured()) {
+    popupActivity.textContent = "Add Firebase keys to see friends here.";
+    return;
+  }
+  try {
+    await listenAuth(async (user) => {
+      if (!user) {
+        popupActivity.textContent = "Sign in on Settings to see friends.";
+        return;
+      }
+      const friends = await loadFriendsActivity();
+      if (!friends.length) {
+        popupActivity.textContent = "No friends yet. Add someone from the Friends page.";
+        return;
+      }
+      popupActivity.innerHTML = friends
+        .map((friend) => {
+          const stats = friend.shareStats && friend.stats
+            ? `${friend.stats.todayFocusPercent}% today · ${friend.stats.streakDays} streak`
+            : "Stats hidden";
+          const track =
+            friend.shareListening && friend.listening?.isPlaying
+              ? ` · ${friend.listening.trackName}`
+              : "";
+          const status = friend.customStatus ? ` · ${friend.customStatus}` : "";
+          return `<p><strong>${friend.username}</strong>${status}<br />${stats}${track}</p>`;
+        })
+        .join("");
+    });
+  } catch {
+    popupActivity.textContent = "Could not load friend activity.";
+  }
+}
+
+bootCloudSync();
+refreshPopupActivity();

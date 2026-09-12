@@ -131,6 +131,49 @@ body {
   display: none;
 }
 
+#session-stats-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(26, 26, 26, 0.45);
+}
+
+#session-stats-modal[hidden] {
+  display: none;
+}
+
+.session-stats-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+#activity-dropdown {
+  border-top: 1px solid #e2e5ea;
+  padding: 8px 16px 12px;
+}
+
+#activity-dropdown summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.popup-activity {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #667085;
+}
+
+.popup-activity p {
+  margin: 0 0 8px;
+}
+
 #end-timer-modal {
   position: fixed;
   inset: 0;

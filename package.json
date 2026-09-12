@@ -1,0 +1,13 @@
+{
+  "name": "focus-tracking-app",
+  "private": true,
+  "scripts": {
+    "bundle:firebase": "esbuild web/firebase-sdk.js --bundle --format=esm --outfile=web/vendor/firebase.js"
+  },
+  "dependencies": {
+    "firebase": "^12.19.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

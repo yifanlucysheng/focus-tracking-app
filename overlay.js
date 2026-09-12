@@ -1,28 +1,52 @@
 (() => {
+  try {
+    if (window.top !== window) return;
+  } catch {
+    return;
+  }
+
   if (window.__focusBuddyOverlayInit) return;
   window.__focusBuddyOverlayInit = true;
 
   const HOST_ID = "focus-buddy-overlay-host";
+
+  let guardObserver = null;
+  let guardTimer = null;
+  let falling = false;
 
   function bunnyUrl(mood) {
     const file = mood === "distracted" ? "angrybunny.png" : "sleepbunny.png";
     return chrome.runtime.getURL(file);
   }
 
+  function getHost() {
+    return document.getElementById(HOST_ID);
+  }
+
   function getImg() {
-    const host = document.getElementById(HOST_ID);
-    return host?.shadowRoot?.querySelector("img") ?? null;
+    return getHost()?.shadowRoot?.querySelector("img") ?? null;
+  }
+
+  function attachHost(host) {
+    const root = document.documentElement;
+    if (!root) return;
+    if (host.parentNode !== root) {
+      root.appendChild(host);
+    }
   }
 
   function ensureHost() {
-    let host = document.getElementById(HOST_ID);
-    if (host) return host;
+    let host = getHost();
+    if (host) {
+      attachHost(host);
+      return host;
+    }
 
     host = document.createElement("div");
     host.id = HOST_ID;
     host.setAttribute("data-focus-buddy", "true");
     host.style.cssText =
-      "all:initial;position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none;";
+      "all:initial;position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:none;";
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
       <style>
@@ -66,43 +90,103 @@
       </style>
       <img class="rest" alt="Focus Buddy" />
     `;
-    const mount = document.documentElement || document.body;
-    mount.appendChild(host);
+    attachHost(host);
     return host;
   }
 
-  function showOverlay(animate) {
-    const host = ensureHost();
-    const img = host.shadowRoot.querySelector("img");
+  function applyMood(img) {
     chrome.storage.local.get("characterMood").then((result) => {
-      img.src = bunnyUrl(result.characterMood);
+      if (img.isConnected) img.src = bunnyUrl(result.characterMood);
     });
+  }
 
-    img.classList.remove("fall", "rest");
-    if (animate) {
-      void img.offsetWidth;
-      img.classList.add("fall");
-      img.addEventListener(
-        "animationend",
-        () => {
-          img.classList.remove("fall");
-          img.classList.add("rest");
-        },
-        { once: true }
-      );
+  function startGuard() {
+    if (!guardObserver) {
+      guardObserver = new MutationObserver(() => {
+        const host = getHost();
+        if (host) attachHost(host);
+      });
+      guardObserver.observe(document.documentElement, { childList: true });
+    }
+
+    if (!guardTimer) {
+      guardTimer = setInterval(() => {
+        chrome.storage.local.get("lockInActive", (result) => {
+          if (!result.lockInActive) {
+            hideOverlay();
+            return;
+          }
+          if (!getHost()) {
+            showOverlay(false);
+            return;
+          }
+          attachHost(getHost());
+        });
+      }, 800);
+    }
+  }
+
+  function stopGuard() {
+    guardObserver?.disconnect();
+    guardObserver = null;
+    if (guardTimer) {
+      clearInterval(guardTimer);
+      guardTimer = null;
+    }
+  }
+
+  function showOverlay(animate) {
+    const alreadyUp = Boolean(getHost());
+    if (!animate && alreadyUp && falling) {
+      startGuard();
       return;
     }
-    img.classList.add("rest");
+
+    const host = ensureHost();
+    const img = host.shadowRoot.querySelector("img");
+    applyMood(img);
+    startGuard();
+
+    if (!animate) {
+      if (falling) return;
+      img.classList.remove("fall");
+      img.classList.add("rest");
+      return;
+    }
+
+    falling = true;
+    img.classList.remove("fall", "rest");
+    void img.offsetWidth;
+    img.classList.add("fall");
+    img.addEventListener(
+      "animationend",
+      () => {
+        falling = false;
+        img.classList.remove("fall");
+        img.classList.add("rest");
+      },
+      { once: true }
+    );
   }
 
   function hideOverlay() {
-    document.getElementById(HOST_ID)?.remove();
+    falling = false;
+    stopGuard();
+    getHost()?.remove();
   }
+
+  chrome.storage.local.get("lockInActive", (result) => {
+    if (result.lockInActive) showOverlay(false);
+  });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.lockInActive && changes.lockInActive.newValue === false) {
-      hideOverlay();
+    if (changes.lockInActive) {
+      if (changes.lockInActive.newValue) {
+        if (!getHost()) showOverlay(false);
+      } else {
+        hideOverlay();
+      }
     }
     if (changes.characterMood) {
       const img = getImg();

@@ -6,6 +6,10 @@ const LOCK_IN_KEY = "lockInActive";
 const TASK_TEXT_KEY = "taskText";
 const TIMER_KEY = "timerState";
 const TIMER_ALARM = "focus-timer-end";
+const SESSION_META_KEY = "sessionMeta";
+const LAST_SESSION_KEY = "lastSession";
+const PENDING_SESSIONS_KEY = "pendingSessions";
+const PROFILE_STATS_KEY = "focusBuddy.profileStats";
 const DEFAULT_SECONDS = 25 * 60;
 const GEMINI_KEY = "geminiApiKey";
 const GEMINI_MODEL = "gemini-2.5-flash";
@@ -55,6 +59,115 @@ async function writeTimer(state) {
   return state;
 }
 
+function summarizeFocusLog(log, startedAt, endedAt) {
+  const entries = Array.isArray(log)
+    ? [...log].filter((item) => item && typeof item.timestamp === "number")
+    : [];
+  entries.sort((a, b) => a.timestamp - b.timestamp);
+
+  const points = [{ status: "on-task", timestamp: startedAt }, ...entries];
+  const lastStatus = points[points.length - 1]?.status || "on-task";
+  points.push({ status: lastStatus, timestamp: endedAt });
+
+  let onTaskMs = 0;
+  let distractedMs = 0;
+  let switches = 0;
+  let prev = "on-task";
+
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const current = points[i];
+    const next = points[i + 1];
+    const status = current.status === "distracted" ? "distracted" : "on-task";
+    const delta = Math.max(0, next.timestamp - current.timestamp);
+    if (status === "distracted") distractedMs += delta;
+    else onTaskMs += delta;
+    if (status === "distracted" && prev !== "distracted") switches += 1;
+    prev = status;
+  }
+
+  const durationMs = Math.max(1000, endedAt - startedAt);
+  const tracked = onTaskMs + distractedMs;
+  const onTaskRatio = tracked > 0 ? onTaskMs / tracked : 1;
+  return {
+    durationMs,
+    onTaskRatio,
+    onTaskPercent: Math.round(onTaskRatio * 100),
+    distractionSwitches: switches,
+  };
+}
+
+async function beginSession(taskText) {
+  const existing = await chrome.storage.local.get(SESSION_META_KEY);
+  if (existing[SESSION_META_KEY]?.startedAt) return;
+  await chrome.storage.local.set({
+    [SESSION_META_KEY]: {
+      startedAt: Date.now(),
+      taskText: String(taskText || "").trim(),
+    },
+    [FOCUS_LOG_KEY]: [],
+  });
+}
+
+async function appendLocalProfileSession(session) {
+  const stored = await chrome.storage.local.get(PROFILE_STATS_KEY);
+  const bag = stored[PROFILE_STATS_KEY] && typeof stored[PROFILE_STATS_KEY] === "object"
+    ? stored[PROFILE_STATS_KEY]
+    : { sessions: [], xp: 0 };
+  const sessions = Array.isArray(bag.sessions) ? bag.sessions : [];
+  sessions.push(session);
+  const xpGain = Math.floor((session.durationMs * (session.onTaskRatio || 0)) / 60000);
+  await chrome.storage.local.set({
+    [PROFILE_STATS_KEY]: {
+      sessions,
+      xp: Math.max(0, Number(bag.xp) || 0) + xpGain,
+      updatedAt: Date.now(),
+    },
+  });
+}
+
+async function finalizeSession() {
+  const stored = await chrome.storage.local.get([
+    SESSION_META_KEY,
+    FOCUS_LOG_KEY,
+    TASK_TEXT_KEY,
+    PENDING_SESSIONS_KEY,
+  ]);
+  const meta = stored[SESSION_META_KEY];
+  if (!meta?.startedAt) return null;
+
+  const endedAt = Date.now();
+  if (endedAt - meta.startedAt < 3000) {
+    await chrome.storage.local.remove(SESSION_META_KEY);
+    return null;
+  }
+
+  const stats = summarizeFocusLog(stored[FOCUS_LOG_KEY], meta.startedAt, endedAt);
+  const session = {
+    id: `session-${meta.startedAt}`,
+    startedAt: meta.startedAt,
+    endedAt,
+    durationMs: stats.durationMs,
+    durationSeconds: Math.round(stats.durationMs / 1000),
+    completed: true,
+    task: String(stored[TASK_TEXT_KEY] || meta.taskText || "").trim(),
+    onTaskRatio: stats.onTaskRatio,
+    onTaskPercent: stats.onTaskPercent,
+    distractionSwitches: stats.distractionSwitches,
+  };
+
+  const pending = Array.isArray(stored[PENDING_SESSIONS_KEY])
+    ? stored[PENDING_SESSIONS_KEY]
+    : [];
+  pending.push(session);
+  await chrome.storage.local.set({
+    [LAST_SESSION_KEY]: session,
+    [PENDING_SESSIONS_KEY]: pending,
+  });
+  await chrome.storage.local.remove(SESSION_META_KEY);
+  await appendLocalProfileSession(session);
+  return session;
+}
+
 async function finishTimer(state) {
   await chrome.alarms.clear(TIMER_ALARM);
   const timer = await writeTimer({
@@ -65,7 +178,9 @@ async function finishTimer(state) {
   });
   const stored = await chrome.storage.local.get(LOCK_IN_KEY);
   if (lockInActive || stored[LOCK_IN_KEY]) {
-    void stopLockIn();
+    await stopLockIn();
+  } else {
+    await finalizeSession();
   }
   return timer;
 }
@@ -74,7 +189,8 @@ async function endTimer() {
   const stored = await chrome.storage.local.get(TIMER_KEY);
   const current = { ...defaultTimerState(), ...(stored[TIMER_KEY] || {}) };
   const timer = await finishTimer(current);
-  return { timer, lockInActive: false };
+  const last = await chrome.storage.local.get(LAST_SESSION_KEY);
+  return { timer, lockInActive: false, session: last[LAST_SESSION_KEY] || null };
 }
 
 async function scheduleEnd(endsAt) {
@@ -617,10 +733,10 @@ async function hideOverlayOnAllTabs() {
 
 async function startLockIn({ taskText }) {
   const text = String(taskText || "").trim();
+  await beginSession(text);
   await chrome.storage.local.set({
     [LOCK_IN_KEY]: true,
     [TASK_TEXT_KEY]: text,
-    [FOCUS_LOG_KEY]: [],
   });
   lockInActive = true;
   geminiCache = new Map();
@@ -636,13 +752,14 @@ async function startLockIn({ taskText }) {
 }
 
 async function stopLockIn() {
+  const session = await finalizeSession();
   lockInActive = false;
   clearDistractedTimer();
   await chrome.storage.local.set({ [LOCK_IN_KEY]: false });
   await setCharacterMood("on-task");
   await hideOverlayOnAllTabs();
   const timer = await readTimer();
-  return { lockInActive: false, timer };
+  return { lockInActive: false, timer, session };
 }
 
 loadKeywords();
@@ -746,13 +863,34 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     endTimer().then(sendResponse);
     return true;
   }
+
+  if (message.type === "GET_LAST_SESSION") {
+    chrome.storage.local.get(LAST_SESSION_KEY).then((result) => {
+      sendResponse({ session: result[LAST_SESSION_KEY] || null });
+    });
+    return true;
+  }
+
+  if (message.type === "CLEAR_LAST_SESSION") {
+    chrome.storage.local.remove(LAST_SESSION_KEY).then(() => sendResponse({ ok: true }));
+    return true;
+  }
 });
+
+async function lockInIsOn() {
+  const result = await chrome.storage.local.get(LOCK_IN_KEY);
+  lockInActive = Boolean(result[LOCK_IN_KEY]);
+  return lockInActive;
+}
 
 chrome.tabs.onActivated.addListener(async () => {
   await evaluateActiveTab();
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete" && (await lockInIsOn())) {
+    await injectOverlay(tabId, false);
+  }
   if (changeInfo.status !== "complete" && !changeInfo.url && !changeInfo.title) {
     return;
   }

@@ -1,2 +1,4 @@
 secrets.local.js
 .DS_Store
+node_modules
+

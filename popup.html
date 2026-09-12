@@ -68,6 +68,11 @@
       <button id="open-dashboard-btn" type="button">Open dashboard</button>
     </p>
 
+    <details id="activity-dropdown">
+      <summary>Friends activity</summary>
+      <div id="popup-activity" class="popup-activity">Sign in on the dashboard Settings page to see friends.</div>
+    </details>
+
     <div id="end-timer-modal" hidden>
       <div class="end-timer-modal-card" role="dialog" aria-labelledby="end-timer-modal-title">
         <img src="angrybunny.png" alt="" class="end-timer-modal-bunny" />
@@ -80,6 +85,18 @@
       </div>
     </div>
 
-    <script src="popup.js"></script>
+    <div id="session-stats-modal" hidden>
+      <div class="end-timer-modal-card" role="dialog" aria-labelledby="session-stats-title">
+        <p id="session-stats-title">Session complete</p>
+        <p id="session-stats-task" class="end-timer-modal-copy"></p>
+        <ul id="session-stats-list" class="session-stats-list"></ul>
+        <p id="session-stats-note" class="end-timer-modal-copy"></p>
+        <div class="end-timer-modal-actions">
+          <button id="session-stats-close-btn" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
   </body>
 </html>

@@ -57,12 +57,23 @@ body {
   z-index: 0;
   isolation: isolate;
   margin: -40px calc(50% - 50vw) 0;
-  padding: 40px max(48px, calc((100vw - 1100px) / 2 + 48px)) 72px;
+  padding: 24px max(48px, calc((100vw - 1100px) / 2 + 48px)) 72px;
   background-color: #faf8f2;
   background-image: url("../assets/star-bg.png");
   background-repeat: repeat;
   background-size: 420px auto;
   background-position: top center;
+}
+
+.home-nav {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 20px;
+}
+
+.home-nav .page-nav {
+  margin: 0;
+  justify-content: flex-end;
 }
 
 .page-nav {
@@ -97,10 +108,36 @@ body {
   outline-offset: 3px;
 }
 
-#focus-session,
-#your-stats,
-#friends {
-  scroll-margin-top: 24px;
+.page-nav-link.is-current,
+.page-nav-link.is-current:hover {
+  background: var(--focus);
+  color: #fff;
+  transform: none;
+}
+
+.page-inner {
+  padding-top: 24px;
+}
+
+.subpage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.subpage-home {
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 36px;
+  color: var(--focus);
+  text-decoration: none;
+}
+
+.subpage-bar .page-nav {
+  margin: 0;
+  justify-content: flex-end;
 }
 
 .hero {
@@ -530,6 +567,19 @@ body {
   .page-nav-link {
     font-size: 16px;
     padding: 7px 14px;
+  }
+
+  .subpage-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .subpage-bar .page-nav {
+    justify-content: flex-start;
+  }
+
+  .subpage-home {
+    font-size: 28px;
   }
 
   .logo {
@@ -995,4 +1045,61 @@ body {
     grid-template-columns: 40px 40px 1fr;
     gap: 10px;
   }
+}
+
+.settings-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-grid .field-input,
+.signed-out-panel .field-input,
+#signed-out-panel .field-input {
+  margin: 8px 0;
+}
+
+.settings-username {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 18px;
+}
+
+.stats-history {
+  margin-top: 28px;
+}
+
+.stats-history-title {
+  margin: 0 0 12px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 32px;
+  color: var(--focus);
+}
+
+.stats-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.stats-history-list li {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #faf8f2;
+}
+
+.stats-history-list span {
+  color: var(--buddy);
+  font-size: 15px;
 }
