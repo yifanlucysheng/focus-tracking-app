@@ -16,6 +16,7 @@
  * @property {number} [onTaskRatio] - 0–1
  * @property {number} [longestLockInMs] - longest uninterrupted on-task stretch
  * @property {Record<string, number>} [distractionDomains] - domain → hit count
+ * @property {Record<string, number>} [productiveDomains] - on-task domain → hit/time weight
  */
 
 /**
@@ -39,6 +40,7 @@
  * @property {string} longestSessionLabel
  * @property {number} sessionsCompleted
  * @property {string|null} topDistraction
+ * @property {string|null} topProductiveSite
  * @property {number} level
  * @property {number} xp
  * @property {number} xpIntoLevel

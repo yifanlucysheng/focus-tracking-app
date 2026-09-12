@@ -129,6 +129,18 @@ export function renderProfileStats(root, stats, options = {}) {
               : "Site that pulled you away most"
           }</p>
         </article>
+
+        <article class="profile-stat-tile">
+          <p class="profile-stat-label">Top Productive Site</p>
+          <p class="profile-stat-value profile-stat-domain">${
+            empty || !stats.topProductiveSite ? "—" : stats.topProductiveSite
+          }</p>
+          <p class="profile-stat-hint">${
+            empty || !stats.topProductiveSite
+              ? "No focus sessions yet"
+              : "Site you stayed on-task with most"
+          }</p>
+        </article>
       </div>
     </div>
   `;

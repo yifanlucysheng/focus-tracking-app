@@ -1,6 +1,12 @@
 import { loadProfileStore } from "./profile/profileStorage.js";
 import { calculateProfileStats } from "./profile/calculateStats.js";
 import { renderProfileStats } from "./profile/renderProfileStats.js";
+import { MOCK_FRIENDS } from "./friends/mockFriends.js";
+import {
+  buildLeaderboardView,
+  currentUserAsFriend,
+} from "./friends/calculateLeaderboard.js";
+import { renderFriendsLeaderboard } from "./friends/renderFriends.js";
 
 const CHARACTERS = {
   cat: {
@@ -16,19 +22,102 @@ const CHARACTERS = {
 const preview = document.getElementById("character-preview");
 const options = Array.from(document.querySelectorAll(".buddy-option"));
 const profileRoot = document.getElementById("profile-stats-root");
+const friendsRoot = document.getElementById("friends-root");
 
 const STORAGE_KEY = "focusBuddy.selectedCharacter";
 const BLOCK_SITES_KEY = "focusBuddy.blockSites";
 const ALLOW_SITES_KEY = "focusBuddy.alwaysAllowSites";
 const LEGACY_SITES_KEY = "focusBuddy.allowedSites";
 const TASK_KEY = "focusBuddy.task";
+const DEMO_FRIENDS_KEY = "focusBuddy.demoFriends";
 
 let selectedCharacterId = "sleepbunny";
+/** @type {'level' | 'streak'} */
+let leaderboardMode = "level";
+/** @type {import('./friends/friendTypes.js').FriendProfile[]} */
+let demoExtraFriends = [];
+
+function loadDemoExtras() {
+  try {
+    const raw = localStorage.getItem(DEMO_FRIENDS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    demoExtraFriends = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    demoExtraFriends = [];
+  }
+}
+
+function saveDemoExtras() {
+  try {
+    localStorage.setItem(DEMO_FRIENDS_KEY, JSON.stringify(demoExtraFriends));
+  } catch {
+    // Ignore.
+  }
+}
 
 function refreshProfileStats() {
   const store = loadProfileStore();
   const stats = calculateProfileStats(store);
   renderProfileStats(profileRoot, stats, { characterId: selectedCharacterId });
+  refreshFriendsLeaderboard(stats);
+}
+
+function refreshFriendsLeaderboard(stats) {
+  if (!friendsRoot) return;
+
+  const profileStats = stats || calculateProfileStats(loadProfileStore());
+  const you = currentUserAsFriend({
+    level: profileStats.level,
+    xp: profileStats.xp,
+    focusStreakDays: profileStats.focusStreakDays,
+    characterId: selectedCharacterId,
+    username: "You",
+  });
+
+  const group = [you, ...MOCK_FRIENDS, ...demoExtraFriends];
+  const view = buildLeaderboardView(group, you.id, leaderboardMode);
+
+  renderFriendsLeaderboard(friendsRoot, view, {
+    onModeChange: (mode) => {
+      leaderboardMode = mode;
+      refreshFriendsLeaderboard(profileStats);
+    },
+    onAddFriend: (username) => {
+      if (!username) {
+        refreshFriendsLeaderboard(profileStats);
+        const note = friendsRoot.querySelector(".friends-demo-note");
+        if (note) note.textContent = "Enter a username to add a demo friend.";
+        return;
+      }
+
+      const exists = [...MOCK_FRIENDS, ...demoExtraFriends].some(
+        (f) => f.username.toLowerCase() === username.toLowerCase()
+      );
+      if (exists) {
+        const note = friendsRoot.querySelector(".friends-demo-note");
+        if (note) note.textContent = "That demo friend is already on your list.";
+        return;
+      }
+
+      demoExtraFriends.push({
+        id: `demo-${Date.now()}`,
+        username,
+        focusLevel: 1 + Math.floor(Math.random() * 4),
+        xp: 40 + Math.floor(Math.random() * 200),
+        focusStreak: Math.floor(Math.random() * 6),
+        characterId: Math.random() > 0.5 ? "cat" : "sleepbunny",
+        isMock: true,
+      });
+      saveDemoExtras();
+      refreshFriendsLeaderboard(profileStats);
+
+      const note = friendsRoot.querySelector(".friends-demo-note");
+      if (note) {
+        note.textContent =
+          "Added as a local demo friend only — this does not connect to a real account.";
+      }
+    },
+  });
 }
 
 function applyCharacter(id) {
@@ -244,4 +333,5 @@ allowSiteInput?.addEventListener("keydown", (event) => {
 
 loadTask();
 loadSites();
+loadDemoExtras();
 refreshProfileStats();

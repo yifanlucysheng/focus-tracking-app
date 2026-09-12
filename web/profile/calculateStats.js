@@ -117,14 +117,15 @@ export function calculateLongestSessionMs(sessions) {
 
 /**
  * @param {FocusSession[]} sessions
+ * @param {'distractionDomains' | 'productiveDomains'} field
  * @returns {string|null}
  */
-export function calculateTopDistraction(sessions) {
+function calculateTopDomain(sessions, field) {
   /** @type {Record<string, number>} */
   const totals = {};
 
   for (const session of sessions) {
-    const domains = session.distractionDomains || {};
+    const domains = session[field] || {};
     for (const [domain, count] of Object.entries(domains)) {
       if (!domain) continue;
       totals[domain] = (totals[domain] || 0) + (Number(count) || 0);
@@ -141,6 +142,22 @@ export function calculateTopDistraction(sessions) {
   }
 
   return top;
+}
+
+/**
+ * @param {FocusSession[]} sessions
+ * @returns {string|null}
+ */
+export function calculateTopDistraction(sessions) {
+  return calculateTopDomain(sessions, "distractionDomains");
+}
+
+/**
+ * @param {FocusSession[]} sessions
+ * @returns {string|null}
+ */
+export function calculateTopProductiveSite(sessions) {
+  return calculateTopDomain(sessions, "productiveDomains");
 }
 
 /**
@@ -216,6 +233,7 @@ export function calculateProfileStats(store, now = Date.now()) {
     longestSessionLabel: formatDurationShort(longestSessionMs),
     sessionsCompleted: completed.length,
     topDistraction: calculateTopDistraction(sessions),
+    topProductiveSite: calculateTopProductiveSite(sessions),
     level: levelInfo.level,
     xp: totalXp,
     xpIntoLevel: levelInfo.xpIntoLevel,
