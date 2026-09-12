@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Focus session · Focus Buddy</title>
+    <link rel="stylesheet" href="buddy.css" />
+  </head>
+  <body>
+    <div class="top-bar" aria-hidden="true"></div>
+
+    <main class="page page-inner">
+      <header class="subpage-bar">
+        <a class="subpage-home" href="index.html">Focus Buddy</a>
+        <nav class="page-nav" data-site-nav></nav>
+      </header>
+
+      <section class="dashboard" aria-label="Focus dashboard">
+        <div data-section-divider></div>
+
+        <div class="dash-grid">
+          <div class="dash-panel dash-task">
+            <label class="field-label" for="task-input">What are you working on?</label>
+            <input
+              id="task-input"
+              class="field-input"
+              type="text"
+              placeholder="Write an essay, study chemistry…"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="dash-panel dash-sites">
+            <label class="field-label" for="block-site-input">Specific sites you want to block?</label>
+            <div class="site-row">
+              <input
+                id="block-site-input"
+                class="field-input"
+                type="url"
+                placeholder="https://youtube.com"
+                autocomplete="off"
+              />
+              <button id="add-block-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+            </div>
+            <ul id="block-site-list" class="site-list" aria-live="polite"></ul>
+          </div>
+
+          <div class="dash-panel dash-allow">
+            <label class="field-label" for="allow-site-input">Always Allow</label>
+            <div class="site-row">
+              <input
+                id="allow-site-input"
+                class="field-input"
+                type="url"
+                placeholder="https://docs.google.com"
+                autocomplete="off"
+              />
+              <button id="add-allow-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+            </div>
+            <ul id="allow-site-list" class="site-list" aria-live="polite"></ul>
+          </div>
+
+          <p id="sites-status" class="sites-status" aria-live="polite"></p>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="session.js"></script>
+  </body>
+</html>

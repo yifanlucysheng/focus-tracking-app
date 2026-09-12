@@ -99,6 +99,11 @@ export function loadProfileStore() {
   }
 }
 
+/** Async wrapper for multi-page callers. */
+export async function loadProfileStoreAsync() {
+  return loadProfileStore();
+}
+
 /**
  * @param {ProfileStore} store
  */

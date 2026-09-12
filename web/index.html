@@ -6,38 +6,15 @@
     <title>Focus Buddy</title>
     <link rel="stylesheet" href="buddy.css" />
   </head>
-  <body class="is-booting">
+  <body>
     <div class="top-bar" aria-hidden="true"></div>
 
-    <!-- Shown only when signed out -->
-    <div id="auth-page" class="auth-page" hidden>
-      <div class="auth-page-inner">
-        <header class="auth-page-brand">
-          <h1 class="logo auth-page-logo">
-            <span class="logo-line">
-              <span class="logo-focus">Focus</span>
-              <svg class="logo-star" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z"
-                />
-              </svg>
-            </span>
-            <span class="logo-buddy-row auth-buddy-row">
-              <span class="logo-buddy">Buddy</span>
-              <img class="auth-buddy-side auth-buddy-left" src="/sleepbunny.png" alt="" />
-              <img class="auth-buddy-side auth-buddy-right" src="/cat.png" alt="" />
-            </span>
-          </h1>
-          <p class="tagline">A fun way to stay on task!</p>
+    <main class="page">
+      <div class="intro-section">
+        <header class="home-nav">
+          <nav class="page-nav" data-site-nav></nav>
         </header>
 
-        <div id="auth-root" class="auth-root"></div>
-      </div>
-    </div>
-
-    <!-- Shown only when signed in -->
-    <main id="app-dashboard" class="page" hidden>
-      <div class="intro-section">
         <header class="hero">
           <div class="brand">
             <h1 class="logo">
@@ -52,7 +29,7 @@
               <span class="logo-buddy-row">
                 <span class="logo-buddy">Buddy</span>
                 <span class="preview" aria-live="polite">
-                  <img id="character-preview" src="/sleepbunny.png" alt="" />
+                  <img id="character-preview" src="/sleepbunny.png" alt="Sleep bunny" />
                 </span>
               </span>
             </h1>
@@ -85,150 +62,7 @@
             </button>
           </div>
         </section>
-
-        <nav class="page-nav" aria-label="Page sections">
-          <a class="page-nav-link" href="#focus-session">Focus session</a>
-          <a class="page-nav-link" href="#your-stats">Stats</a>
-          <a class="page-nav-link" href="#friends">Friends</a>
-        </nav>
       </div>
-
-      <section id="focus-session" class="dashboard" aria-label="Focus dashboard">
-        <div class="section-divider" aria-hidden="true">
-          <span class="section-divider-ornament" data-side="left">
-            <svg class="ornament-star" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-            <svg class="ornament-moon" viewBox="0 0 24 24">
-              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
-            </svg>
-            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-          </span>
-          <span id="focus-session-label" class="section-divider-label">Focus session</span>
-          <span class="section-divider-ornament" data-side="right">
-            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-            <svg class="ornament-moon" viewBox="0 0 24 24">
-              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
-            </svg>
-            <svg class="ornament-star" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-          </span>
-        </div>
-
-        <div class="dash-grid">
-          <div class="dash-panel dash-task">
-            <label class="field-label" for="task-input">What are you working on?</label>
-            <input
-              id="task-input"
-              class="field-input"
-              type="text"
-              placeholder="Write an essay, study chemistry…"
-              autocomplete="off"
-            />
-          </div>
-
-          <div class="dash-panel dash-sites">
-            <label class="field-label" for="block-site-input">Specific sites you want to block?</label>
-            <div class="site-row">
-              <input
-                id="block-site-input"
-                class="field-input"
-                type="url"
-                placeholder="https://youtube.com"
-                autocomplete="off"
-              />
-              <button id="add-block-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
-            </div>
-            <ul id="block-site-list" class="site-list" aria-live="polite"></ul>
-          </div>
-
-          <div class="dash-panel dash-allow">
-            <label class="field-label" for="allow-site-input">Always Allow</label>
-            <div class="site-row">
-              <input
-                id="allow-site-input"
-                class="field-input"
-                type="url"
-                placeholder="https://docs.google.com"
-                autocomplete="off"
-              />
-              <button id="add-allow-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
-            </div>
-            <ul id="allow-site-list" class="site-list" aria-live="polite"></ul>
-          </div>
-
-          <p id="sites-status" class="sites-status" aria-live="polite"></p>
-        </div>
-      </section>
-
-      <section id="your-stats" class="profile-section" aria-label="Personal stats">
-        <div class="section-divider" aria-hidden="true">
-          <span class="section-divider-ornament" data-side="left">
-            <svg class="ornament-star" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-            <svg class="ornament-moon" viewBox="0 0 24 24">
-              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
-            </svg>
-            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-          </span>
-          <span id="stats-section-label" class="section-divider-label">Stats</span>
-          <span class="section-divider-ornament" data-side="right">
-            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-            <svg class="ornament-moon" viewBox="0 0 24 24">
-              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
-            </svg>
-            <svg class="ornament-star" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-          </span>
-        </div>
-
-        <div id="profile-stats-root" class="profile-stats-root"></div>
-      </section>
-
-      <section id="friends" class="friends-section" aria-label="Friends and leaderboard">
-        <div class="section-divider" aria-hidden="true">
-          <span class="section-divider-ornament" data-side="left">
-            <svg class="ornament-star" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-            <svg class="ornament-moon" viewBox="0 0 24 24">
-              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
-            </svg>
-            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-          </span>
-          <span class="section-divider-label">Friends</span>
-          <span class="section-divider-ornament" data-side="right">
-            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-            <svg class="ornament-moon" viewBox="0 0 24 24">
-              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
-            </svg>
-            <svg class="ornament-star" viewBox="0 0 24 24">
-              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
-            </svg>
-          </span>
-        </div>
-
-        <div id="friends-root" class="friends-root"></div>
-      </section>
-
-      <section class="signout-section" aria-label="Sign out">
-        <button id="sign-out-btn" class="btn btn-secondary signout-btn" type="button">Sign Out</button>
-      </section>
     </main>
 
     <script type="module" src="buddy.js"></script>

@@ -57,12 +57,23 @@ body {
   z-index: 0;
   isolation: isolate;
   margin: -40px calc(50% - 50vw) 0;
-  padding: 40px max(48px, calc((100vw - 1100px) / 2 + 48px)) 72px;
+  padding: 24px max(48px, calc((100vw - 1100px) / 2 + 48px)) 72px;
   background-color: #faf8f2;
   background-image: url("/star-bg.png");
   background-repeat: repeat;
   background-size: 420px auto;
   background-position: top center;
+}
+
+.home-nav {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 20px;
+}
+
+.home-nav .page-nav {
+  margin: 0;
+  justify-content: flex-end;
 }
 
 .page-nav {
@@ -84,8 +95,6 @@ body {
   font-family: "LXGW Marker Gothic", sans-serif;
   font-size: 18px;
   text-decoration: none;
-  border: none;
-  cursor: pointer;
   transition: background-color 0.2s ease, transform 0.15s ease;
 }
 
@@ -99,213 +108,36 @@ body {
   outline-offset: 3px;
 }
 
-button.page-nav-signout {
-  appearance: none;
+.page-nav-link.is-current,
+.page-nav-link.is-current:hover {
+  background: var(--focus);
+  color: #fff;
+  transform: none;
 }
 
-#focus-session,
-#your-stats,
-#friends {
-  scroll-margin-top: 24px;
+.page-inner {
+  padding-top: 24px;
 }
 
-/* —— Account / auth —— */
-body.is-booting #auth-page,
-body.is-booting #app-dashboard {
-  visibility: hidden;
-}
-
-#auth-page[hidden],
-#app-dashboard[hidden] {
-  display: none !important;
-}
-
-.auth-page {
-  min-height: calc(100vh - 22px);
-  margin: 0 calc(50% - 50vw);
-  padding: 48px 24px 64px;
+.subpage-bar {
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  background-color: #faf8f2;
-  background-image: url("/star-bg.png");
-  background-repeat: repeat;
-  background-size: 420px auto;
-  background-position: top center;
-}
-
-.auth-page-inner {
-  width: min(440px, 100%);
-  display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: center;
-  text-align: center;
-  gap: 20px;
-  padding-top: 12px;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
 }
 
-.auth-page-brand {
-  width: 100%;
-  /* Room for absolutely positioned buddies under the logo/tagline */
-  padding-bottom: clamp(140px, 28vw, 200px);
-}
-
-.auth-page-logo {
-  font-size: clamp(64px, 14vw, 110px);
-}
-
-.auth-page-logo .logo-buddy-row {
-  margin-left: 0.35em;
-  justify-content: flex-start;
-  width: fit-content;
-  margin-inline: auto;
-  position: relative;
-}
-
-.auth-buddy-row {
-  position: relative;
-}
-
-.auth-buddy-side {
-  position: absolute;
-  top: 0.72em;
-  object-fit: contain;
-  filter: drop-shadow(0 10px 18px rgba(42, 24, 107, 0.12));
-  pointer-events: none;
-}
-
-.auth-buddy-left {
-  width: clamp(260px, 52vw, 380px);
-  height: clamp(260px, 52vw, 380px);
-  right: calc(100% - 0.15em);
-}
-
-.auth-buddy-right {
-  width: clamp(220px, 44vw, 330px);
-  height: clamp(220px, 44vw, 330px);
-  left: calc(100% - 0.15em);
-}
-
-.auth-page-brand .tagline {
-  margin-top: 12px;
-}
-
-.auth-page-copy {
-  margin: 0;
-  max-width: 18em;
-  color: var(--ink);
-  font-size: clamp(18px, 3vw, 24px);
-  line-height: 1.35;
-}
-
-.auth-section {
-  padding-bottom: 8px;
-}
-
-.auth-root {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  min-height: 80px;
-  margin-top: 24px;
-}
-
-.auth-card {
-  width: 100%;
-  max-width: 420px;
-  text-align: left;
-  background: rgba(247, 239, 216, 0.72);
-  border: 1px solid rgba(100, 108, 166, 0.22);
-  border-radius: 24px;
-  padding: 22px 24px;
-  box-shadow: var(--soft-shadow);
-}
-
-.auth-mode-toggle {
-  display: inline-flex;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 999px;
-  background: rgba(247, 239, 216, 0.7);
-  border: 1px solid rgba(100, 108, 166, 0.22);
-  width: fit-content;
-  margin-bottom: 18px;
-}
-
-.auth-mode-btn {
-  appearance: none;
-  border: none;
-  border-radius: 999px;
-  padding: 10px 18px;
-  background: transparent;
-  color: var(--buddy);
-  font-family: "LXGW Marker Gothic", sans-serif;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.auth-mode-btn.is-active {
-  background: #646ca6;
-  color: #fff;
-}
-
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.auth-form .field-label {
-  margin-top: 8px;
-}
-
-.auth-form .btn,
-.auth-form #auth-submit-btn,
-.auth-submit-btn {
-  margin-top: 22px;
-  width: 100%;
-  padding: 14px 22px;
-  font-size: 22px;
-  border-radius: 14px;
-  color: #fff;
-  background: #646ca6;
-  box-shadow: 0 8px 18px rgba(100, 108, 166, 0.28);
-}
-
-.auth-form .btn:hover:not(:disabled),
-.auth-form #auth-submit-btn:hover:not(:disabled),
-.auth-submit-btn:hover:not(:disabled) {
-  background: #555d96;
-  transform: translateY(-1px);
-}
-
-.auth-username {
-  margin: 6px 0 0;
+.subpage-home {
   font-family: "PP Mondwest", "Courier New", monospace;
-  font-size: 28px;
+  font-size: 36px;
   color: var(--focus);
+  text-decoration: none;
 }
 
-.auth-meta {
-  margin: 8px 0 16px;
-  color: var(--buddy);
-  font-size: 16px;
-}
-
-.auth-status {
-  min-height: 1.4em;
-  margin: 14px 0 0;
-  color: var(--buddy);
-  font-size: 15px;
-  line-height: 1.4;
-}
-
-.auth-status.is-error {
-  color: #9b4d6c;
-}
-
-.auth-status.is-success {
-  color: var(--tagline);
+.subpage-bar .page-nav {
+  margin: 0;
+  justify-content: flex-end;
 }
 
 .hero {
@@ -737,6 +569,19 @@ body.is-booting #app-dashboard {
     padding: 7px 14px;
   }
 
+  .subpage-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .subpage-bar .page-nav {
+    justify-content: flex-start;
+  }
+
+  .subpage-home {
+    font-size: 28px;
+  }
+
   .logo {
     font-size: clamp(72px, 18vw, 200px);
   }
@@ -791,6 +636,7 @@ body.is-booting #app-dashboard {
 }
 
 .profile-hero-card,
+.profile-flame-card,
 .profile-streak-card,
 .profile-level-card,
 .profile-stat-tile {
@@ -896,6 +742,18 @@ body.is-booting #app-dashboard {
   line-height: 1.4;
 }
 
+.profile-flame-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 150px;
+  background: linear-gradient(160deg, rgba(213, 154, 44, 0.16), rgba(247, 239, 216, 0.7));
+}
+
+.profile-flame-card.is-empty {
+  background: rgba(247, 239, 216, 0.45);
+}
+
 .profile-streak-card {
   display: flex;
   flex-direction: column;
@@ -919,7 +777,15 @@ body.is-booting #app-dashboard {
   line-height: 1.15;
 }
 
-.profile-streak-sub,
+.profile-flame-text {
+  margin: 0;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: clamp(28px, 4vw, 40px);
+  color: var(--focus);
+  line-height: 1.15;
+}
+
+.profile-flame-sub,
 .profile-level-sub,
 .profile-stat-hint {
   margin: 10px 0 0;
@@ -1014,38 +880,7 @@ body.is-booting #app-dashboard {
 
 /* —— Friends + leaderboard —— */
 .friends-section {
-  position: relative;
-  z-index: 0;
-  padding-bottom: 40px;
-}
-
-.friends-section .section-divider {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-.friends-upper {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  margin-top: 0;
-  padding: 28px max(48px, calc((100vw - 1100px) / 2 + 48px)) 36px;
-  background: linear-gradient(180deg, #fffff7 0%, #ffffff 100%);
-}
-
-.signout-section {
-  display: flex;
-  justify-content: center;
-  margin-top: 48px;
-  padding: 40px 0 64px;
-  border-top: 2px solid rgba(100, 108, 166, 0.28);
-}
-
-.signout-btn {
-  min-width: 160px;
+  padding-bottom: 56px;
 }
 
 .friends-root {
@@ -1055,16 +890,28 @@ body.is-booting #app-dashboard {
 .friends-layout {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 20px;
+}
+
+.friends-upper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .friends-add-card,
 .friends-requests-card,
 .friends-summary-card {
-  background: #e4e7f9;
+  background: rgba(247, 239, 216, 0.45);
   border: 1px solid rgba(100, 108, 166, 0.22);
   border-radius: 24px;
   padding: 22px 24px;
+}
+
+.friends-requests-empty {
+  margin: 8px 0 0;
+  color: var(--buddy);
+  font-size: 15px;
 }
 
 .friends-add-row {
@@ -1074,106 +921,23 @@ body.is-booting #app-dashboard {
   max-width: 520px;
 }
 
-.friends-add-row .btn-secondary {
-  color: #fff;
-  background: #646ca6;
-}
-
-.friends-add-row .btn-secondary:hover:not(:disabled) {
-  background: #555d96;
-}
-
 .friends-add-row .field-input {
   flex: 1;
   min-width: 0;
 }
 
-.friends-add-status {
+.friends-demo-note {
   margin: 12px 0 0;
   color: var(--buddy);
   font-size: 15px;
   line-height: 1.4;
-  min-height: 1.2em;
-}
-
-.friends-add-status.is-error {
-  color: #9b3b3b;
-}
-
-.friends-add-status.is-success {
-  color: #2f6b45;
-}
-
-.friends-add-status.is-loading {
-  color: var(--buddy);
-}
-
-.friends-requests-card {
-  margin-top: 0;
-}
-
-.friends-requests-empty {
-  margin: 8px 0 0;
-  color: var(--buddy);
-  font-size: 15px;
-}
-
-.friends-requests-list {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.friends-request-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(100, 108, 166, 0.16);
-}
-
-.friends-request-username {
-  margin: 0;
-  font-family: "PP Mondwest", "Courier New", monospace;
-  font-size: 22px;
-  color: var(--focus);
-}
-
-.friends-request-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.friends-request-actions .btn-secondary {
-  color: #fff;
-  background: #646ca6;
-}
-
-.friends-request-actions .btn-secondary:hover:not(:disabled) {
-  background: #555d96;
-}
-
-.friends-decline-btn {
-  background: transparent;
-  color: var(--buddy);
-  border: 1px solid rgba(100, 108, 166, 0.35);
-}
-
-.friends-decline-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.7);
 }
 
 .friends-summary-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  margin-top: 12px;
 }
 
 .friends-summary-value {
@@ -1184,25 +948,19 @@ body.is-booting #app-dashboard {
   line-height: 1.2;
 }
 
-.friends-summary-value.is-muted {
-  font-size: clamp(18px, 2.4vw, 22px);
-  color: var(--buddy);
+.friends-leaderboard-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.friends-leaderboard-status,
-.friends-leaderboard-empty {
-  margin: 0;
-  padding: 18px 20px;
-  border-radius: 16px;
-  background: rgba(228, 231, 249, 0.55);
-  color: var(--buddy);
-  font-size: 18px;
-  line-height: 1.4;
-}
-
-.friends-leaderboard-status.is-error {
-  color: #9b3b3b;
-  background: rgba(155, 59, 59, 0.08);
+.friends-leaderboard-heading {
+  margin: 0 0 12px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 400;
+  color: var(--focus);
+  line-height: 1.1;
 }
 
 .friends-compare-msg {
@@ -1213,25 +971,6 @@ body.is-booting #app-dashboard {
   color: var(--ink);
   font-size: 18px;
   line-height: 1.4;
-}
-
-.friends-leaderboard-block {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 8px;
-  padding-top: 28px;
-  border-top: 2px solid rgba(100, 108, 166, 0.35);
-  background: #ffffff;
-}
-
-.friends-leaderboard-heading {
-  margin: 0;
-  font-family: "PP Mondwest", "Courier New", monospace;
-  font-size: clamp(28px, 4vw, 36px);
-  font-weight: 400;
-  color: var(--focus);
-  line-height: 1.1;
 }
 
 .friends-mode-toggle {
@@ -1344,11 +1083,6 @@ body.is-booting #app-dashboard {
 }
 
 @media (max-width: 900px) {
-  .friends-upper {
-    padding-left: max(24px, calc((100vw - 1100px) / 2 + 24px));
-    padding-right: max(24px, calc((100vw - 1100px) / 2 + 24px));
-  }
-
   .friends-summary-grid {
     grid-template-columns: 1fr;
   }
@@ -1357,15 +1091,6 @@ body.is-booting #app-dashboard {
 @media (max-width: 640px) {
   .friends-add-row {
     flex-wrap: wrap;
-  }
-
-  .friends-request-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .friends-request-actions .btn {
-    flex: 1;
   }
 
   .friends-mode-toggle {
@@ -1380,4 +1105,61 @@ body.is-booting #app-dashboard {
     grid-template-columns: 40px 40px 1fr;
     gap: 10px;
   }
+}
+
+.settings-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-grid .field-input,
+.signed-out-panel .field-input,
+#signed-out-panel .field-input {
+  margin: 8px 0;
+}
+
+.settings-username {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 18px;
+}
+
+.stats-history {
+  margin-top: 28px;
+}
+
+.stats-history-title {
+  margin: 0 0 12px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 32px;
+  color: var(--focus);
+}
+
+.stats-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.stats-history-list li {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #faf8f2;
+}
+
+.stats-history-list span {
+  color: var(--buddy);
+  font-size: 15px;
 }
