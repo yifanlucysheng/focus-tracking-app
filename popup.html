@@ -23,6 +23,26 @@
             sec
           </label>
         </div>
+        <div class="timer-actions">
+          <button id="start-timer-btn" type="button">Start timer</button>
+          <button id="end-timer-btn" type="button" hidden>End timer</button>
+        </div>
+      </div>
+    </details>
+
+    <details id="folders-dropdown">
+      <summary>Folders</summary>
+      <div id="folders-section">
+        <p class="folders-hint">Click a folder to open its sites. Type that name in task to open them on lock-in too.</p>
+        <div id="folder-buttons"></div>
+        <div class="folder-add-row">
+          <input id="new-folder-name" type="text" placeholder="New folder name" />
+          <button id="add-folder-btn" type="button">Add folder</button>
+        </div>
+        <p class="folders-hint">Save this page (or paste a URL) into folders:</p>
+        <input id="site-url" type="url" placeholder="https://example.com" />
+        <div id="folder-checks"></div>
+        <button id="save-site-btn" type="button">Save site to checked folders</button>
       </div>
     </details>
 
@@ -42,6 +62,22 @@
 
     <div id="summary-section" hidden>
       <p id="summary-text"></p>
+    </div>
+
+    <p class="dashboard-link-row">
+      <button id="open-dashboard-btn" type="button">Open dashboard</button>
+    </p>
+
+    <div id="end-timer-modal" hidden>
+      <div class="end-timer-modal-card" role="dialog" aria-labelledby="end-timer-modal-title">
+        <img src="angrybunny.png" alt="" class="end-timer-modal-bunny" />
+        <p id="end-timer-modal-title">Are you sure?</p>
+        <p class="end-timer-modal-copy">Ending early will make the bunny sad. (It does not actually die.)</p>
+        <div class="end-timer-modal-actions">
+          <button id="kill-bunny-btn" type="button">Yes - KILL THE BUNNY</button>
+          <button id="love-bunny-btn" type="button">return back to locked-in bc i love my bunny</button>
+        </div>
+      </div>
     </div>
 
     <script src="popup.js"></script>

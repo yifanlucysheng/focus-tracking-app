@@ -78,6 +78,136 @@ body {
   text-align: center;
 }
 
+#end-timer-btn {
+  appearance: none;
+  margin-top: 10px;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: #c44b4b;
+  cursor: pointer;
+}
+
+.timer-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+#start-timer-btn,
+#end-timer-btn {
+  appearance: none;
+  margin-top: 0;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+
+#start-timer-btn {
+  background: #2f6fed;
+}
+
+#start-timer-btn:hover {
+  background: #1f5bd6;
+}
+
+#start-timer-btn[hidden] {
+  display: none;
+}
+
+#end-timer-btn:hover {
+  background: #a83c3c;
+}
+
+#end-timer-btn[hidden] {
+  display: none;
+}
+
+#end-timer-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(26, 26, 26, 0.45);
+}
+
+#end-timer-modal[hidden] {
+  display: none;
+}
+
+.end-timer-modal-card {
+  width: 100%;
+  max-width: 320px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff;
+  text-align: center;
+}
+
+.end-timer-modal-bunny {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+#end-timer-modal-title {
+  margin: 8px 0 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.end-timer-modal-copy {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: #667085;
+}
+
+.end-timer-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.end-timer-modal-actions button {
+  appearance: none;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.3;
+}
+
+#kill-bunny-btn {
+  color: #fff;
+  background: #c44b4b;
+}
+
+#kill-bunny-btn:hover {
+  background: #a83c3c;
+}
+
+#love-bunny-btn {
+  color: #1a1a1a;
+  background: #e8ebf0;
+}
+
+#love-bunny-btn:hover {
+  background: #d8dde6;
+}
+
 #lock-in-row {
   display: flex;
   align-items: center;
@@ -197,4 +327,153 @@ body {
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.4;
+}
+
+#folders-dropdown {
+  border-bottom: 1px solid #e2e5ea;
+  padding: 8px 16px 10px;
+}
+
+#folders-dropdown summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#folders-dropdown summary::-webkit-details-marker {
+  display: none;
+}
+
+#folders-dropdown summary::after {
+  content: "▸";
+  font-size: 0.85rem;
+  color: #667085;
+}
+
+#folders-dropdown[open] summary::after {
+  content: "▾";
+}
+
+#folders-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+#folder-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.folder-chip {
+  display: flex;
+  align-items: stretch;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #2f6fed;
+}
+
+.folder-open-btn,
+.folder-delete-btn,
+#add-folder-btn,
+#save-site-btn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.folder-open-btn {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  background: #2f6fed;
+  color: #fff;
+}
+
+.folder-open-btn:hover {
+  background: #1f5bd6;
+}
+
+.folder-delete-btn {
+  padding: 0 8px;
+  font-size: 0.95rem;
+  background: #1f5bd6;
+  color: #fff;
+}
+
+.folder-delete-btn:hover {
+  background: #c44b4b;
+}
+
+.folder-add-row {
+  display: flex;
+  gap: 6px;
+}
+
+#new-folder-name,
+#site-url {
+  min-width: 0;
+  flex: 1;
+  box-sizing: border-box;
+  border: 1px solid #d5d9e0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+}
+
+#add-folder-btn,
+#save-site-btn {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: #fff;
+  background: #2f6fed;
+}
+
+#save-site-btn:hover,
+#add-folder-btn:hover {
+  background: #1f5bd6;
+}
+
+.folders-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #667085;
+}
+
+#folder-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.folder-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.dashboard-link-row {
+  margin: 0;
+  padding: 0 16px 12px;
+}
+
+#open-dashboard-btn {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  color: #2f6fed;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
 }

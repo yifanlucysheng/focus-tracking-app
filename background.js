@@ -1,4 +1,5 @@
 const KEYWORDS_KEY = "taskKeywords";
+const LABELS_KEY = "labelLibrary";
 const FOCUS_LOG_KEY = "focusLog";
 const MOOD_KEY = "characterMood";
 const LOCK_IN_KEY = "lockInActive";
@@ -9,6 +10,8 @@ const DEFAULT_SECONDS = 25 * 60;
 const GEMINI_KEY = "geminiApiKey";
 const GEMINI_MODEL = "gemini-2.5-flash";
 const DISTRACTED_DELAY_MS = 10_000;
+const BLOCK_SITES_KEY = "alwaysBlockSites";
+const ALLOW_SITES_KEY = "alwaysAllowSites";
 
 let taskKeywords = [];
 let lockInActive = false;
@@ -53,14 +56,26 @@ async function writeTimer(state) {
 }
 
 async function finishTimer(state) {
-  const finished = {
-    ...state,
-    status: "finished",
-    remainingSeconds: 0,
-    endsAt: null,
-  };
   await chrome.alarms.clear(TIMER_ALARM);
-  return writeTimer(finished);
+  const timer = await writeTimer({
+    durationSeconds: state.durationSeconds || DEFAULT_SECONDS,
+    remainingSeconds: state.durationSeconds || DEFAULT_SECONDS,
+    endsAt: null,
+    status: "idle",
+  });
+  if (lockInActive) {
+    await stopLockIn();
+  }
+  return timer;
+}
+
+async function endTimer() {
+  const current = await readTimer();
+  if (current.status !== "running" && current.status !== "paused") {
+    return { timer: current, lockInActive };
+  }
+  const timer = await finishTimer(current);
+  return { timer, lockInActive: false };
 }
 
 async function scheduleEnd(endsAt) {
@@ -106,6 +121,14 @@ async function startTimer(durationSeconds) {
   });
 }
 
+async function startTimerWithLockIn(durationSeconds, taskText) {
+  await loadKeywords();
+  if (!lockInActive) {
+    await startLockIn({ taskText: taskText ?? "" });
+  }
+  return startTimer(durationSeconds);
+}
+
 async function pauseTimer() {
   const current = await readTimer();
   if (current.status !== "running") return current;
@@ -143,6 +166,152 @@ async function cancelTimer() {
     endsAt: null,
     status: "idle",
   });
+}
+
+const STARTER_LIBRARY = {
+  seeded: true,
+  labels: [
+    { id: "math", name: "Math" },
+    { id: "chemistry", name: "Chemistry" },
+    { id: "history", name: "History" },
+  ],
+  sites: [
+    { url: "https://www.khanacademy.org/math", title: "Khan Academy Math", labelIds: ["math"] },
+    { url: "https://www.desmos.com/calculator", title: "Desmos", labelIds: ["math"] },
+    { url: "https://www.wolframalpha.com/", title: "Wolfram Alpha", labelIds: ["math"] },
+    { url: "https://www.chemguide.co.uk/", title: "Chemguide", labelIds: ["chemistry"] },
+    { url: "https://ptable.com/", title: "Periodic Table", labelIds: ["chemistry"] },
+    { url: "https://www.khanacademy.org/science/chemistry", title: "Khan Academy Chemistry", labelIds: ["chemistry"] },
+    { url: "https://www.khanacademy.org/humanities/world-history", title: "Khan Academy World History", labelIds: ["history"] },
+    { url: "https://www.britannica.com/", title: "Britannica", labelIds: ["history"] },
+    { url: "https://www.sparknotes.com/history/", title: "SparkNotes History", labelIds: ["history"] },
+  ],
+};
+
+function normalizeSiteUrl(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function labelIdFromName(name, existingIds) {
+  const base = String(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "label";
+  let id = base;
+  let n = 2;
+  while (existingIds.includes(id)) {
+    id = `${base}-${n}`;
+    n += 1;
+  }
+  return id;
+}
+
+async function loadLibrary() {
+  const result = await chrome.storage.local.get(LABELS_KEY);
+  const stored = result[LABELS_KEY];
+  if (stored && Array.isArray(stored.labels) && Array.isArray(stored.sites)) {
+    return stored;
+  }
+  await chrome.storage.local.set({ [LABELS_KEY]: STARTER_LIBRARY });
+  return STARTER_LIBRARY;
+}
+
+async function saveLibrary(library) {
+  await chrome.storage.local.set({ [LABELS_KEY]: library });
+  return library;
+}
+
+function urlsForLabel(library, labelId) {
+  return [...new Set(
+    library.sites
+      .filter((site) => site.labelIds.includes(labelId))
+      .map((site) => site.url)
+  )];
+}
+
+function labelsMatchingTask(library, taskText) {
+  const hay = String(taskText || "").toLowerCase();
+  if (!hay) return [];
+  return library.labels.filter((label) => {
+    const name = label.name.toLowerCase();
+    return hay === name || hay.includes(name);
+  });
+}
+
+async function openUrls(urls) {
+  for (const url of urls) {
+    await chrome.tabs.create({ url, active: false });
+  }
+}
+
+async function openLabelTabs(labelId) {
+  const library = await loadLibrary();
+  const urls = urlsForLabel(library, labelId);
+  await openUrls(urls);
+  return { ok: true, count: urls.length, urls };
+}
+
+async function openTabsForTask(taskText) {
+  const library = await loadLibrary();
+  const matches = labelsMatchingTask(library, taskText);
+  const urls = [...new Set(matches.flatMap((label) => urlsForLabel(library, label.id)))];
+  await openUrls(urls);
+  return urls.length;
+}
+
+async function createLabel(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return loadLibrary();
+  const library = await loadLibrary();
+  if (library.labels.some((label) => label.name.toLowerCase() === trimmed.toLowerCase())) {
+    return library;
+  }
+  const id = labelIdFromName(trimmed, library.labels.map((label) => label.id));
+  library.labels.push({ id, name: trimmed });
+  return saveLibrary(library);
+}
+
+async function deleteLabel(labelId) {
+  const library = await loadLibrary();
+  library.labels = library.labels.filter((label) => label.id !== labelId);
+  library.sites = library.sites
+    .map((site) => ({
+      ...site,
+      labelIds: site.labelIds.filter((id) => id !== labelId),
+    }))
+    .filter((site) => site.labelIds.length > 0);
+  return saveLibrary(library);
+}
+
+async function saveSite({ url, title, labelIds }) {
+  const normalized = normalizeSiteUrl(url);
+  const ids = Array.isArray(labelIds) ? [...new Set(labelIds.filter(Boolean))] : [];
+  if (!normalized || ids.length === 0) return loadLibrary();
+
+  const library = await loadLibrary();
+  const validIds = ids.filter((id) => library.labels.some((label) => label.id === id));
+  if (validIds.length === 0) return library;
+
+  const existing = library.sites.find((site) => site.url === normalized);
+  if (existing) {
+    existing.labelIds = [...new Set([...existing.labelIds, ...validIds])];
+    if (title) existing.title = title;
+  } else {
+    library.sites.push({
+      url: normalized,
+      title: String(title || normalized),
+      labelIds: validIds,
+    });
+  }
+  return saveLibrary(library);
 }
 
 function extractKeywords(taskText) {
@@ -314,20 +483,91 @@ Reply with JSON only: {"related": true} or {"related": false}`;
   }
 }
 
+function hostnameOf(value) {
+  try {
+    const href = String(value).includes("://") ? String(value) : `https://${value}`;
+    return new URL(href).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function urlMatchesSiteList(url, entries) {
+  const host = hostnameOf(url);
+  if (!host || !Array.isArray(entries)) return false;
+  return entries.some((entry) => {
+    const other = hostnameOf(entry);
+    return other && (host === other || host.endsWith(`.${other}`));
+  });
+}
+
+function isFolderSavedSite(url, library) {
+  const normalized = normalizeSiteUrl(url);
+  if (!normalized || !library?.sites) return false;
+  return library.sites.some((site) => {
+    const saved = site.url;
+    if (!saved) return false;
+    if (normalized === saved || normalized.startsWith(saved) || saved.startsWith(normalized)) {
+      return true;
+    }
+    return hostnameOf(normalized) === hostnameOf(saved);
+  });
+}
+
+async function loadSiteRules() {
+  let fromSync = {};
+  try {
+    fromSync = await chrome.storage.sync.get([BLOCK_SITES_KEY, ALLOW_SITES_KEY]);
+  } catch {
+    fromSync = {};
+  }
+  const fromLocal = await chrome.storage.local.get([BLOCK_SITES_KEY, ALLOW_SITES_KEY]);
+  const blockSites = Array.isArray(fromSync[BLOCK_SITES_KEY])
+    ? fromSync[BLOCK_SITES_KEY]
+    : Array.isArray(fromLocal[BLOCK_SITES_KEY])
+      ? fromLocal[BLOCK_SITES_KEY]
+      : [];
+  const allowSites = Array.isArray(fromSync[ALLOW_SITES_KEY])
+    ? fromSync[ALLOW_SITES_KEY]
+    : Array.isArray(fromLocal[ALLOW_SITES_KEY])
+      ? fromLocal[ALLOW_SITES_KEY]
+      : [];
+  return { blockSites, allowSites };
+}
+
 async function classifyTab(tab) {
   await loadKeywords();
   if (!lockInActive || !tab) return null;
 
   const details = await scanTabDetails(tab);
-  const keywordHit = classifyByKeywords(details.haystack);
-  if (keywordHit) return keywordHit;
+  const { blockSites, allowSites } = await loadSiteRules();
+
+  if (urlMatchesSiteList(details.url, blockSites)) {
+    return "distracted";
+  }
+  if (urlMatchesSiteList(details.url, allowSites)) {
+    return "on-task";
+  }
+
+  const library = await loadLibrary();
+  if (isFolderSavedSite(details.url, library)) {
+    return "on-task";
+  }
 
   const storedTask = await chrome.storage.local.get(TASK_TEXT_KEY);
   const task = String(storedTask[TASK_TEXT_KEY] || "").trim();
+
+  if (!task) {
+    return "on-task";
+  }
+
+  const keywordHit = classifyByKeywords(details.haystack);
+  if (keywordHit) return keywordHit;
+
   const geminiStatus = await askGeminiIfRelated(task, details);
   if (geminiStatus) return geminiStatus;
 
-  return "distracted";
+  return "on-task";
 }
 
 async function classifyActiveTab() {
@@ -376,7 +616,7 @@ async function hideOverlayOnAllTabs() {
   );
 }
 
-async function startLockIn({ taskText, useTimer, durationSeconds }) {
+async function startLockIn({ taskText }) {
   const text = String(taskText || "").trim();
   await chrome.storage.local.set({
     [LOCK_IN_KEY]: true,
@@ -388,14 +628,11 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
   await saveKeywords(extractKeywords(text));
   await setCharacterMood("on-task");
   clearDistractedTimer();
-
-  let timer = await readTimer();
-  if (useTimer) {
-    timer = await startTimer(durationSeconds);
-  }
+  await openTabsForTask(text);
 
   await evaluateActiveTab();
   await showOverlayOnAllTabs(true);
+  const timer = await readTimer();
   return { lockInActive: true, timer };
 }
 
@@ -405,11 +642,12 @@ async function stopLockIn() {
   await chrome.storage.local.set({ [LOCK_IN_KEY]: false });
   await setCharacterMood("on-task");
   await hideOverlayOnAllTabs();
-  const timer = await cancelTimer();
+  const timer = await readTimer();
   return { lockInActive: false, timer };
 }
 
 loadKeywords();
+loadLibrary();
 readTimer();
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -443,6 +681,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "GET_LABELS") {
+    loadLibrary().then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "CREATE_LABEL") {
+    createLabel(message.name).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "DELETE_LABEL") {
+    deleteLabel(message.labelId).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "SAVE_SITE") {
+    saveSite(message).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "OPEN_LABEL") {
+    openLabelTabs(message.labelId).then(sendResponse);
+    return true;
+  }
+
   if (message.type === "GET_LOG") {
     chrome.storage.local.get(FOCUS_LOG_KEY).then((result) => {
       const focusLog = Array.isArray(result[FOCUS_LOG_KEY])
@@ -459,7 +722,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "START_TIMER") {
-    startTimer(message.durationSeconds).then(sendResponse);
+    startTimerWithLockIn(message.durationSeconds, message.taskText).then((timer) => {
+      sendResponse({ timer, lockInActive: true });
+    });
     return true;
   }
 
@@ -477,6 +742,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     cancelTimer().then(sendResponse);
     return true;
   }
+
+  if (message.type === "END_TIMER") {
+    endTimer().then(sendResponse);
+    return true;
+  }
 });
 
 chrome.tabs.onActivated.addListener(async () => {
@@ -484,12 +754,6 @@ chrome.tabs.onActivated.addListener(async () => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === "complete") {
-    await loadKeywords();
-    if (lockInActive) {
-      await injectOverlay(tabId, false);
-    }
-  }
   if (changeInfo.status !== "complete" && !changeInfo.url && !changeInfo.title) {
     return;
   }

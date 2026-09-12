@@ -33,8 +33,8 @@
           position: fixed;
           left: 20px;
           top: 0;
-          width: 96px;
-          height: 96px;
+          width: 115px;
+          height: 115px;
           object-fit: contain;
           z-index: 2147483647;
           pointer-events: none;
@@ -51,20 +51,20 @@
         }
         @keyframes focus-buddy-fall {
           0% {
-            transform: translateY(-120px);
+            transform: translateY(-140px);
           }
           82% {
-            transform: translateY(calc(100vh - 124px));
+            transform: translateY(calc(100vh - 143px));
           }
           91% {
-            transform: translateY(calc(100vh - 148px));
+            transform: translateY(calc(100vh - 167px));
           }
           100% {
-            transform: translateY(calc(100vh - 116px));
+            transform: translateY(calc(100vh - 135px));
           }
         }
       </style>
-      <img alt="Focus Buddy" />
+      <img class="rest" alt="Focus Buddy" />
     `;
     const mount = document.documentElement || document.body;
     mount.appendChild(host);

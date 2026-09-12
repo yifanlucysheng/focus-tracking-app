@@ -7,6 +7,11 @@ const timerDisplay = document.getElementById("timer-display");
 const hoursInput = document.getElementById("duration-hours");
 const minutesInput = document.getElementById("duration-minutes");
 const secondsInput = document.getElementById("duration-seconds");
+const endTimerBtn = document.getElementById("end-timer-btn");
+const startTimerBtn = document.getElementById("start-timer-btn");
+const endTimerModal = document.getElementById("end-timer-modal");
+const killBunnyBtn = document.getElementById("kill-bunny-btn");
+const loveBunnyBtn = document.getElementById("love-bunny-btn");
 const characterImg = document.getElementById("character-img");
 const lockInBtn = document.getElementById("lock-in-btn");
 const lockInHint = document.getElementById("lock-in-hint");
@@ -14,6 +19,12 @@ const summarySection = document.getElementById("summary-section");
 const summaryText = document.getElementById("summary-text");
 const taskTextInput = document.getElementById("task-text");
 const changeTaskBtn = document.getElementById("change-task-btn");
+const labelChips = document.getElementById("folder-buttons");
+const labelChecks = document.getElementById("folder-checks");
+const newLabelName = document.getElementById("new-folder-name");
+const addLabelBtn = document.getElementById("add-folder-btn");
+const siteUrlInput = document.getElementById("site-url");
+const saveSiteBtn = document.getElementById("save-site-btn");
 
 let snapshot = null;
 let displayId = null;
@@ -78,21 +89,14 @@ function applySnapshot(state) {
   timerDisplay.textContent = formatTime(remainingFromSnapshot());
   const timerBusy = state.status === "running" || state.status === "paused";
   setDurationLock(timerBusy);
+  if (endTimerBtn) endTimerBtn.hidden = !timerBusy;
+  if (startTimerBtn) startTimerBtn.hidden = timerBusy;
 
   if (state.status === "idle" || state.status === "finished") {
     setDurationInputs(state.durationSeconds || DEFAULT_SECONDS);
   }
-
-  if (state.status === "finished" && !summaryShown) {
-    summaryShown = true;
-    showSummary();
-  }
-  if (state.status !== "finished") {
-    summaryShown = false;
-    if (state.status !== "running" && state.status !== "paused") {
-      summarySection.hidden = true;
-    }
-  }
+  summarySection.hidden = true;
+  summaryShown = false;
 }
 
 function refreshTimer() {
@@ -203,8 +207,6 @@ function activateLockIn() {
     "START_LOCK_IN",
     {
       taskText: taskTextInput?.value?.trim() ?? "",
-      useTimer: Boolean(timerDropdown?.open),
-      durationSeconds: durationFromInputs(),
     },
     (response) => {
       if (!response) return;
@@ -269,8 +271,153 @@ changeTaskBtn?.addEventListener("click", (event) => {
   beginChangeTask();
 });
 
+function renderLibrary(library) {
+  if (!library) return;
+  if (labelChips) {
+    labelChips.innerHTML = "";
+    library.labels.forEach((label) => {
+      const count = library.sites.filter((site) => site.labelIds.includes(label.id)).length;
+      const chip = document.createElement("div");
+      chip.className = "folder-chip";
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "folder-open-btn";
+      openBtn.textContent = `${label.name} (${count})`;
+      openBtn.addEventListener("click", () => {
+        if (taskTextInput && !taskTextInput.disabled) {
+          taskTextInput.value = label.name;
+        }
+        sendMessage("OPEN_LABEL", { labelId: label.id });
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "folder-delete-btn";
+      deleteBtn.setAttribute("aria-label", `Delete ${label.name} folder`);
+      deleteBtn.textContent = "×";
+      deleteBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        sendMessage("DELETE_LABEL", { labelId: label.id }, renderLibrary);
+      });
+
+      chip.append(openBtn, deleteBtn);
+      labelChips.append(chip);
+    });
+  }
+
+  if (labelChecks) {
+    labelChecks.innerHTML = "";
+    library.labels.forEach((label) => {
+      const wrap = document.createElement("label");
+      wrap.className = "folder-check";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = label.id;
+      wrap.append(box, document.createTextNode(label.name));
+      labelChecks.append(wrap);
+    });
+  }
+}
+
+function refreshLibrary() {
+  sendMessage("GET_LABELS", {}, renderLibrary);
+}
+
+function prefillsiteUrl() {
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (siteUrlInput && tab?.url && !siteUrlInput.value) {
+      siteUrlInput.value = tab.url;
+      siteUrlInput.dataset.title = tab.title || "";
+    }
+  });
+}
+
+addLabelBtn?.addEventListener("click", () => {
+  sendMessage("CREATE_LABEL", { name: newLabelName?.value }, (library) => {
+    if (newLabelName) newLabelName.value = "";
+    renderLibrary(library);
+  });
+});
+
+newLabelName?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addLabelBtn?.click();
+  }
+});
+
+saveSiteBtn?.addEventListener("click", () => {
+  const labelIds = [...(labelChecks?.querySelectorAll("input:checked") || [])].map(
+    (box) => box.value
+  );
+  sendMessage(
+    "SAVE_SITE",
+    {
+      url: siteUrlInput?.value,
+      title: siteUrlInput?.dataset.title || "",
+      labelIds,
+    },
+    (library) => {
+      renderLibrary(library);
+      labelChecks?.querySelectorAll("input").forEach((box) => {
+        box.checked = false;
+      });
+    }
+  );
+});
+
+document.getElementById("open-dashboard-btn")?.addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("web/index.html") });
+});
+
+function showEndTimerModal() {
+  if (endTimerModal) endTimerModal.hidden = false;
+}
+
+function hideEndTimerModal() {
+  if (endTimerModal) endTimerModal.hidden = true;
+}
+
+startTimerBtn?.addEventListener("click", () => {
+  sendMessage(
+    "START_TIMER",
+    {
+      durationSeconds: durationFromInputs(),
+      taskText: taskTextInput?.value?.trim() ?? "",
+    },
+    (response) => {
+      const timer = response?.timer ?? response;
+      if (timer) applySnapshot(timer);
+      setLockInUi(true);
+      pollLatestFocusStatus();
+    }
+  );
+});
+
+endTimerBtn?.addEventListener("click", () => {
+  showEndTimerModal();
+});
+
+killBunnyBtn?.addEventListener("click", () => {
+  hideEndTimerModal();
+  sendMessage("END_TIMER", {}, (response) => {
+    const timer = response?.timer ?? response;
+    if (timer) applySnapshot(timer);
+    setLockInUi(false);
+    setCharacterMood("on-task");
+  });
+});
+
+loveBunnyBtn?.addEventListener("click", () => {
+  hideEndTimerModal();
+});
+
 refreshTimer();
 pollLatestFocusStatus();
+refreshLibrary();
+prefillsiteUrl();
 displayId = setInterval(() => {
   if (snapshot?.status === "running") {
     const remaining = remainingFromSnapshot();
