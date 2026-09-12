@@ -14,6 +14,8 @@ const secondsInput = document.getElementById("duration-seconds");
 const endTimerBtn = document.getElementById("end-timer-btn");
 const startTimerBtn = document.getElementById("start-timer-btn");
 const endTimerModal = document.getElementById("end-timer-modal");
+const endTimerModalImg = document.getElementById("end-timer-modal-img");
+const endTimerModalCopy = document.getElementById("end-timer-modal-copy");
 const killBunnyBtn = document.getElementById("kill-bunny-btn");
 const loveBunnyBtn = document.getElementById("love-bunny-btn");
 const sessionStatsModal = document.getElementById("session-stats-modal");
@@ -479,8 +481,28 @@ sendMessage("GET_LAST_SESSION", {}, (response) => {
   maybeShowSession(response?.session);
 });
 
+function applyEndTimerModalCharacter(characterId) {
+  const isCat = characterId === "cat";
+  const animal = isCat ? "cat" : "bunny";
+  if (endTimerModalImg) {
+    endTimerModalImg.src = isCat ? "cat.png" : "moon3.png";
+  }
+  if (endTimerModalCopy) {
+    endTimerModalCopy.textContent = `Ending early will make the ${animal} sad. (It does not actually die.)`;
+  }
+  if (killBunnyBtn) {
+    killBunnyBtn.textContent = `Yes - KILL THE ${animal.toUpperCase()}`;
+  }
+  if (loveBunnyBtn) {
+    loveBunnyBtn.textContent = `return back to locked-in mode bc i love my ${animal}`;
+  }
+}
+
 function showEndTimerModal() {
-  if (endTimerModal) endTimerModal.hidden = false;
+  sendMessage("GET_BUDDY_VISUAL", {}, (visual) => {
+    applyEndTimerModalCharacter(visual?.characterId);
+    if (endTimerModal) endTimerModal.hidden = false;
+  });
 }
 
 function hideEndTimerModal() {

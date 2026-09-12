@@ -6,7 +6,7 @@
   }
 
   // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
-  const OVERLAY_VERSION = 22;
+  const OVERLAY_VERSION = 24;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   document.getElementById("focus-buddy-overlay-host")?.remove();
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
@@ -52,11 +52,11 @@
     "moonbuddysprites/stage5moon/gravestone.png",
   ];
 
-  const STAGE_SIZE_FACTOR = 1.25;
+  const STAGE_SIZE_FACTOR = 1.5;
   const OVERLAY_BASE_SIZE_PX = 125;
 
   /**
-   * Stage 1 (healthiest) = 1×. Each worse stage multiplies size by 1.25.
+   * Stage 1 (healthiest) = 1×. Each worse stage multiplies size by 1.5.
    * @param {"cat"|"sleepbunny"} characterId
    * @param {number} health
    * @returns {number}
