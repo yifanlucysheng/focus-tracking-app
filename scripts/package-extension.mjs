@@ -21,7 +21,7 @@ const REQUIRED_FILES = [
   "popup-auth.js",
   "style.css",
   "overlay.js",
-  "icon.png",
+  "logo.PNG",
   "sleepbunny.png",
   "angrybunny.png",
   "secrets.local.js",
@@ -67,7 +67,7 @@ copyFile("popup.js");
 copyFile("popup-auth.js");
 copyFile("style.css");
 copyFile("overlay.js");
-copyFile("icon.png");
+copyFile("logo.PNG");
 copyFile("sleepbunny.png");
 copyFile("angrybunny.png");
 
