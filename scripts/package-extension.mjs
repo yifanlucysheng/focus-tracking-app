@@ -94,6 +94,22 @@ copyFile("assets/cat5.png", "cat5.png");
 copyFile("assets/cat6.png", "cat6.png");
 copyFile("assets/cat7.png", "cat7.png");
 
+// Popup ES modules import these (Friends activity + cloud sync).
+const popupWebModules = [
+  "web/cloud.js",
+  "web/firebase-config.js",
+  "web/session-sync.js",
+  "web/vendor/firebase.js",
+  "web/profile/calculateStats.js",
+  "web/profile/sessionSummary.js",
+  "web/profile/focusStreak.js",
+  "web/profile/xp.js",
+];
+for (const rel of popupWebModules) {
+  copyFile(rel);
+  REQUIRED_FILES.push(rel);
+}
+
 // secrets: prefer real local secrets; fall back to example so the SW can load
 const secretsSrc = path.join(root, "secrets.local.js");
 const secretsExample = path.join(root, "secrets.local.example.js");

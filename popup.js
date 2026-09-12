@@ -288,6 +288,9 @@ function setPopupTab(tab) {
   });
   if (homePanel) homePanel.hidden = next !== "home";
   if (activityPanel) activityPanel.hidden = next !== "activity";
+  if (next === "activity") {
+    void refreshPopupActivity();
+  }
 }
 
 popupTabButtons.forEach((button) => {
@@ -551,7 +554,8 @@ async function refreshPopupActivity() {
   try {
     await listenAuth(async (user) => {
       if (!user) {
-        popupActivity.textContent = "Sign in on Settings to see friends.";
+        popupActivity.textContent =
+          "Sign in on the dashboard Settings page (open it from this popup), then reopen the extension.";
         return;
       }
       const friends = await loadFriendsActivity();
@@ -561,7 +565,7 @@ async function refreshPopupActivity() {
       }
       popupActivity.innerHTML = `<ol class="popup-activity-list" aria-label="Friend activity">${friends
         .map((friend) => {
-          const avatar = friend.characterId === "cat" ? "assets/cat.png" : "sleepbunny.png";
+          const avatar = friend.characterId === "cat" ? "cat.png" : "moon1.png";
           const stats = friend.shareStats && friend.stats
             ? `${friend.stats.todayFocusPercent ?? 0}% today · ${friend.stats.streakDays ?? 0} day streak`
             : "Stats hidden";

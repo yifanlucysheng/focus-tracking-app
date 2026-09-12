@@ -90,12 +90,49 @@ export async function signUpWithEmail({ email, password, username }) {
 export async function signInWithEmail(email, password) {
   await loadSdk();
   const cred = await authFns.signInWithEmailAndPassword(auth, email, password);
+  // Keep the extension service worker on the same Firebase session.
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage(
+        { type: "AUTH_SIGN_IN", email, password },
+        () => {
+          void chrome.runtime.lastError;
+        }
+      );
+    } else {
+      window.postMessage(
+        {
+          source: "focus-buddy-website",
+          type: "AUTH_SIGN_IN",
+          email,
+          password,
+        },
+        "*"
+      );
+    }
+  } catch {
+    // Not running inside the extension.
+  }
   return cred.user;
 }
 
 export async function signOutUser() {
   await loadSdk();
   await authFns.signOut(auth);
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: "AUTH_SIGN_OUT" }, () => {
+        void chrome.runtime.lastError;
+      });
+    } else {
+      window.postMessage(
+        { source: "focus-buddy-website", type: "AUTH_SIGN_OUT" },
+        "*"
+      );
+    }
+  } catch {
+    // Not running inside the extension.
+  }
 }
 
 export async function loadUserDoc(uid = currentUid()) {

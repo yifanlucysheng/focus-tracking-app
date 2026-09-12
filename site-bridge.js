@@ -99,6 +99,17 @@
     }
   }
 
+  function pushAuthToExtension(type, extra = {}) {
+    try {
+      if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) return;
+      chrome.runtime.sendMessage({ type, ...extra }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      // Extension context invalidated.
+    }
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     const data = event.data;
@@ -108,6 +119,15 @@
     }
     if (data.type === "SYNC_SITE_LISTS") {
       syncSiteListsFromLocalStorage();
+    }
+    if (data.type === "AUTH_SIGN_IN") {
+      pushAuthToExtension("AUTH_SIGN_IN", {
+        email: data.email,
+        password: data.password,
+      });
+    }
+    if (data.type === "AUTH_SIGN_OUT") {
+      pushAuthToExtension("AUTH_SIGN_OUT");
     }
   });
 
