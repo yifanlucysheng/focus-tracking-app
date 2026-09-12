@@ -31312,15 +31312,22 @@ This typically indicates that your device does not have a healthy Internet conne
   function calculateTopProductiveSite(sessions) {
     return calculateTopDomain(sessions, "productiveDomains");
   }
+  function characterHealthFromOnTaskRatio(onTaskRatio) {
+    const ratio = Math.min(1, Math.max(0, Number(onTaskRatio) || 0));
+    const offTaskPercent = Math.round((1 - ratio) * 100);
+    return Math.max(0, Math.min(100, 100 - offTaskPercent));
+  }
   function calculateCharacterHealth(sessions) {
-    const recent = sessions.filter((s2) => s2.completed).slice(-5);
-    if (recent.length === 0) return 0;
-    const ratios = recent.map((s2) => {
-      if (typeof s2.onTaskRatio === "number") return Math.min(1, Math.max(0, s2.onTaskRatio));
-      return 0.5;
-    });
-    const avg = ratios.reduce((a, b2) => a + b2, 0) / ratios.length;
-    return Math.round(avg * 100);
+    const completed = sessions.filter((s2) => s2.completed);
+    if (completed.length === 0) return 100;
+    const last = completed[completed.length - 1];
+    if (typeof last.onTaskRatio === "number") {
+      return characterHealthFromOnTaskRatio(last.onTaskRatio);
+    }
+    if (typeof last.onTaskPercent === "number") {
+      return characterHealthFromOnTaskRatio(last.onTaskPercent / 100);
+    }
+    return 100;
   }
   function characterHealthLabel(health) {
     if (health <= 0) return "Resting";
@@ -31353,6 +31360,7 @@ This typically indicates that your device does not have a healthy Internet conne
       hasSessions,
       characterHealth: health,
       characterHealthLabel: characterHealthLabel(health),
+      liveSessionActive: false,
       focusStreakDays: focusStreak,
       lastCompletedFocusDate: lastDay,
       longestSessionMs,
@@ -31497,6 +31505,7 @@ This typically indicates that your device does not have a healthy Internet conne
       topDistraction: summary.top_distraction ?? null,
       topProductiveSite: summary.top_productive_site ?? null,
       characterHealth: summary.character_health ?? 0,
+      liveSessionActive: false,
       updatedAt: Date.now()
     };
     try {
@@ -31525,6 +31534,38 @@ This typically indicates that your device does not have a healthy Internet conne
       });
       return null;
     }
+  }
+  async function syncLiveCharacterHealth(health, options = {}) {
+    const auth2 = getFirebaseAuth();
+    const userId = auth2?.currentUser?.uid;
+    if (!userId) return null;
+    const characterHealth = Math.max(
+      0,
+      Math.min(100, Math.floor(Number(health) || 0))
+    );
+    const liveSessionActive = Boolean(options.liveSessionActive);
+    const payload = {
+      characterHealth,
+      liveSessionActive,
+      healthUpdatedAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    try {
+      const db2 = getFirebaseDb();
+      await setDoc(doc(db2, "users", userId, "public", "stats"), payload, {
+        merge: true
+      });
+      return payload;
+    } catch (err) {
+      console.warn("[Focus Buddy] Live character health sync failed:", err);
+      return null;
+    }
+  }
+  async function syncLiveCharacterHealthFromRatio(onTaskRatio, options = {}) {
+    return syncLiveCharacterHealth(
+      characterHealthFromOnTaskRatio(onTaskRatio),
+      options
+    );
   }
   async function recordCompletedSession(sessionInput) {
     const sessionId = String(sessionInput.sessionId || "").trim();
@@ -31708,6 +31749,8 @@ This typically indicates that your device does not have a healthy Internet conne
     signOut: signOut2,
     recordCompletedSession,
     syncProfileStats,
+    syncLiveCharacterHealth,
+    syncLiveCharacterHealthFromRatio,
     flushPendingPublicSync
   };
   globalThis.FocusBuddyAuth = FocusBuddyAuth;

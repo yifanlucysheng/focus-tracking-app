@@ -7,6 +7,7 @@ import {
   applyXp,
   calculateProfileStats,
   calculateSessionXp,
+  characterHealthFromOnTaskRatio,
   normalizeProgressXp,
 } from "../web/profile/calculateStats.js";
 import {
@@ -68,6 +69,7 @@ export async function syncProfileStats(userId, stats, sessionId, sessionDoc) {
     topDistraction: summary.top_distraction ?? null,
     topProductiveSite: summary.top_productive_site ?? null,
     characterHealth: summary.character_health ?? 0,
+    liveSessionActive: false,
     updatedAt: Date.now(),
   };
 
@@ -97,6 +99,53 @@ export async function syncProfileStats(userId, stats, sessionId, sessionDoc) {
     });
     return null;
   }
+}
+
+/**
+ * Push live session character health to Firebase so the website can mirror it mid-session.
+ * Health starts at 100 and drops 1 point per 1% of session time spent off-task.
+ *
+ * @param {number} health 0–100
+ * @param {{ liveSessionActive?: boolean }} [options]
+ */
+export async function syncLiveCharacterHealth(health, options = {}) {
+  const auth = getFirebaseAuth();
+  const userId = auth?.currentUser?.uid;
+  if (!userId) return null;
+
+  const characterHealth = Math.max(
+    0,
+    Math.min(100, Math.floor(Number(health) || 0))
+  );
+  const liveSessionActive = Boolean(options.liveSessionActive);
+  const payload = {
+    characterHealth,
+    liveSessionActive,
+    healthUpdatedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  try {
+    const db = getFirebaseDb();
+    await setDoc(doc(db, "users", userId, "public", "stats"), payload, {
+      merge: true,
+    });
+    return payload;
+  } catch (err) {
+    console.warn("[Focus Buddy] Live character health sync failed:", err);
+    return null;
+  }
+}
+
+/**
+ * @param {number} onTaskRatio
+ * @param {{ liveSessionActive?: boolean }} [options]
+ */
+export async function syncLiveCharacterHealthFromRatio(onTaskRatio, options = {}) {
+  return syncLiveCharacterHealth(
+    characterHealthFromOnTaskRatio(onTaskRatio),
+    options
+  );
 }
 
 /**

@@ -9,12 +9,42 @@ const DEFAULT_SECONDS = 25 * 60;
 const GEMINI_KEY = "geminiApiKey";
 const GEMINI_MODEL = "gemini-2.5-flash";
 const DISTRACTED_DELAY_MS = 10_000;
+const LIVE_HEALTH_SYNC_MIN_MS = 1500;
+const CHARACTER_HEALTH_KEY = "characterHealth";
 
 let taskKeywords = [];
 let lockInActive = false;
 let distractedTimerId = null;
 let geminiCache = new Map();
 let geminiInflight = new Map();
+let lastLiveHealthSynced = null;
+let lastLiveHealthSyncAt = 0;
+let liveHealthSyncTimer = null;
+let liveHealthTickTimer = null;
+let healthResetRetryTimer = null;
+
+function stopLiveHealthTicker() {
+  if (liveHealthSyncTimer !== null) {
+    clearTimeout(liveHealthSyncTimer);
+    liveHealthSyncTimer = null;
+  }
+  if (liveHealthTickTimer !== null) {
+    clearInterval(liveHealthTickTimer);
+    liveHealthTickTimer = null;
+  }
+}
+
+function startLiveHealthTicker() {
+  stopLiveHealthTicker();
+  liveHealthTickTimer = setInterval(async () => {
+    if (!lockInActive) {
+      stopLiveHealthTicker();
+      return;
+    }
+    const health = await currentSessionCharacterHealth();
+    await pushLiveCharacterHealth(health, { liveSessionActive: true });
+  }, LIVE_HEALTH_SYNC_MIN_MS);
+}
 
 try {
   importScripts("secrets.local.js");
@@ -181,6 +211,12 @@ async function finishTimer(state) {
   await chrome.alarms.clear(TIMER_ALARM);
   await writeTimer(finished);
 
+  stopLiveHealthTicker();
+  const finalHealth = await currentSessionCharacterHealth(endedAt);
+  await pushLiveCharacterHealth(finalHealth, {
+    liveSessionActive: false,
+    force: true,
+  });
   await recordFocusSessionFromTimer(finished);
 
   const handled = { ...finished, completionHandled: true };
@@ -237,30 +273,157 @@ async function recordFocusSessionFromTimer(timerState) {
 }
 
 /**
- * Local-only estimate from focusLog; never uploaded.
+ * Time-weighted on-task ratio from focusLog ("spent" time, not sample counts).
+ * Assumes on-task from session start until the first classification.
  * @param {number} startedAt
  * @param {number} endedAt
  * @returns {Promise<number>}
  */
 async function estimateOnTaskRatio(startedAt, endedAt) {
   try {
+    const start = Number(startedAt) || 0;
+    const end = Math.max(start, Number(endedAt) || Date.now());
+    if (end <= start) return 1;
+
     const result = await chrome.storage.local.get(FOCUS_LOG_KEY);
     const focusLog = Array.isArray(result[FOCUS_LOG_KEY])
       ? result[FOCUS_LOG_KEY]
       : [];
-    const slice = focusLog.filter(
-      (entry) =>
-        entry &&
-        typeof entry.timestamp === "number" &&
-        entry.timestamp >= startedAt &&
-        entry.timestamp <= endedAt
-    );
-    if (slice.length === 0) return 1;
-    const onTask = slice.filter((entry) => entry.status === "on-task").length;
-    return onTask / slice.length;
+    const slice = focusLog
+      .filter(
+        (entry) =>
+          entry &&
+          typeof entry.timestamp === "number" &&
+          entry.timestamp >= start &&
+          entry.timestamp <= end
+      )
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    let cursor = start;
+    let status = "on-task";
+    let onTaskMs = 0;
+
+    for (const entry of slice) {
+      const at = Math.min(end, Math.max(start, entry.timestamp));
+      if (at > cursor) {
+        if (status === "on-task") onTaskMs += at - cursor;
+        cursor = at;
+      }
+      status = entry.status === "on-task" ? "on-task" : "distracted";
+    }
+    if (end > cursor && status === "on-task") {
+      onTaskMs += end - cursor;
+    }
+
+    return Math.min(1, Math.max(0, onTaskMs / (end - start)));
   } catch {
     return 1;
   }
+}
+
+/**
+ * Character health for the active session: 100 − (% time spent off-task).
+ * @param {number} [endedAt]
+ * @returns {Promise<number>}
+ */
+async function currentSessionCharacterHealth(endedAt = Date.now()) {
+  const timer = await readTimer();
+  const startedAt =
+    typeof timer.startedAt === "number" ? timer.startedAt : Date.now();
+  const ratio = await estimateOnTaskRatio(startedAt, endedAt);
+  const offTaskPercent = Math.round((1 - ratio) * 100);
+  return Math.max(0, Math.min(100, 100 - offTaskPercent));
+}
+
+/**
+ * Sync live health to Firebase (website mirrors this mid-session).
+ * @param {number} health
+ * @param {{ liveSessionActive?: boolean, force?: boolean }} [options]
+ * @returns {Promise<boolean>} whether the cloud write succeeded
+ */
+async function pushLiveCharacterHealth(health, options = {}) {
+  const value = Math.max(0, Math.min(100, Math.floor(Number(health) || 0)));
+  const liveSessionActive = Boolean(options.liveSessionActive);
+  const force = Boolean(options.force);
+  const now = Date.now();
+
+  if (
+    !force &&
+    lastLiveHealthSynced === value &&
+    now - lastLiveHealthSyncAt < LIVE_HEALTH_SYNC_MIN_MS
+  ) {
+    return true;
+  }
+
+  try {
+    await chrome.storage.local.set({
+      [CHARACTER_HEALTH_KEY]: value,
+      liveSessionActive,
+    });
+  } catch {
+    // Local cache is best-effort.
+  }
+
+  try {
+    await AUTH_READY;
+    if (!globalThis.FocusBuddyAuth?.syncLiveCharacterHealth) return false;
+    const result = await globalThis.FocusBuddyAuth.syncLiveCharacterHealth(
+      value,
+      { liveSessionActive }
+    );
+    if (!result) return false;
+    lastLiveHealthSynced = value;
+    lastLiveHealthSyncAt = Date.now();
+    return true;
+  } catch (err) {
+    console.warn("[Focus Buddy] Live health sync skipped:", err?.message || err);
+    return false;
+  }
+}
+
+/**
+ * Every new focus session starts at full health (100/100) and refreshes the website.
+ * Retries cloud sync briefly if auth is still warming up.
+ */
+async function resetCharacterHealthForNewSession() {
+  if (healthResetRetryTimer !== null) {
+    clearTimeout(healthResetRetryTimer);
+    healthResetRetryTimer = null;
+  }
+
+  stopLiveHealthTicker();
+  lastLiveHealthSynced = null;
+  lastLiveHealthSyncAt = 0;
+
+  await chrome.storage.local.set({
+    [CHARACTER_HEALTH_KEY]: 100,
+    liveSessionActive: true,
+  });
+
+  const trySync = async (attempt) => {
+    const ok = await pushLiveCharacterHealth(100, {
+      liveSessionActive: true,
+      force: true,
+    });
+    if (ok || !lockInActive || attempt >= 6) return;
+    healthResetRetryTimer = setTimeout(() => {
+      healthResetRetryTimer = null;
+      void trySync(attempt + 1);
+    }, 750 * attempt);
+  };
+
+  await trySync(1);
+}
+
+function scheduleLiveHealthSync() {
+  if (!lockInActive) return;
+  if (liveHealthSyncTimer !== null) return;
+  liveHealthSyncTimer = setTimeout(async () => {
+    liveHealthSyncTimer = null;
+    if (!lockInActive) return;
+    const health = await currentSessionCharacterHealth();
+    await pushLiveCharacterHealth(health, { liveSessionActive: true });
+  }, LIVE_HEALTH_SYNC_MIN_MS);
 }
 
 /**
@@ -480,6 +643,9 @@ function clearDistractedTimer() {
 
 async function applyTabStatus(status, tab) {
   await appendFocusLog(status, tab);
+  if (lockInActive) {
+    scheduleLiveHealthSync();
+  }
 
   if (status === "on-task") {
     clearDistractedTimer();
@@ -699,6 +865,9 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
   await setCharacterMood("on-task");
   clearDistractedTimer();
 
+  // Reset to 100/100 before classifying tabs so the website refreshes immediately.
+  await resetCharacterHealthForNewSession();
+
   let timer = await readTimer();
   if (useTimer) {
     // Reset any prior timer so a new lock-in always uses the duration from the popup.
@@ -708,16 +877,28 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
 
   await evaluateActiveTab();
   await showOverlayOnAllTabs(true);
+  // Re-assert full health after timer start (covers any race with tab classification).
+  await pushLiveCharacterHealth(100, { liveSessionActive: true, force: true });
+  startLiveHealthTicker();
   return { lockInActive: true, timer };
 }
 
 async function stopLockIn() {
   lockInActive = false;
   clearDistractedTimer();
+  stopLiveHealthTicker();
+  if (healthResetRetryTimer !== null) {
+    clearTimeout(healthResetRetryTimer);
+    healthResetRetryTimer = null;
+  }
   await chrome.storage.local.set({ [LOCK_IN_KEY]: false });
   await setCharacterMood("on-task");
   await hideOverlayOnAllTabs();
   const timer = await cancelTimer();
+  await pushLiveCharacterHealth(lastLiveHealthSynced ?? 100, {
+    liveSessionActive: false,
+    force: true,
+  });
   return { lockInActive: false, timer };
 }
 

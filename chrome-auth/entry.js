@@ -11,6 +11,8 @@ import {
 import {
   flushPendingPublicSync,
   recordCompletedSession,
+  syncLiveCharacterHealth,
+  syncLiveCharacterHealthFromRatio,
   syncProfileStats,
 } from "./sessionStatsService.js";
 
@@ -21,6 +23,8 @@ const FocusBuddyAuth = {
   signOut,
   recordCompletedSession,
   syncProfileStats,
+  syncLiveCharacterHealth,
+  syncLiveCharacterHealthFromRatio,
   flushPendingPublicSync,
 };
 

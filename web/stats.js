@@ -8,6 +8,7 @@ import { renderProfileStats } from "./profile/renderProfileStats.js";
 import {
   isCloudConfigured,
   listenAuth,
+  listenOwnPublicStats,
   loadMySessions,
   loadOwnPublicStats,
   loadUserDoc,
@@ -18,6 +19,15 @@ mountSectionDivider("Your stats");
 
 const profileRoot = document.getElementById("profile-stats-root");
 
+/** @type {object|null} */
+let cachedLocalStore = null;
+/** @type {object[]} */
+let cachedSessions = [];
+/** @type {object|null} */
+let cachedUserDoc = null;
+/** @type {(() => void)|null} */
+let unsubPublicStats = null;
+
 function renderHistory(sessions) {
   const existing = document.getElementById("stats-history");
   existing?.remove();
@@ -25,7 +35,7 @@ function renderHistory(sessions) {
   wrap.id = "stats-history";
   wrap.className = "stats-history";
   wrap.innerHTML = `
-    <h2 class="stats-history-title">Stats history</h2>
+    <h2 class="stats-history-title">history</h2>
     ${
       sessions.length
         ? `<ol class="stats-history-list">
@@ -66,12 +76,45 @@ function asProfileRow(publicStats, userDoc) {
     top_distraction: publicStats?.topDistraction ?? null,
     top_productive_site: publicStats?.topProductiveSite ?? null,
     character_health: publicStats?.characterHealth ?? 0,
+    live_session_active: Boolean(publicStats?.liveSessionActive),
     created_at: "",
   };
 }
 
+/**
+ * @param {object|null} publicStats
+ */
+function paintStats(publicStats) {
+  if (!cachedLocalStore) return;
+
+  // A newly started live session should always show full health immediately.
+  let statsPayload = publicStats;
+  if (publicStats?.liveSessionActive) {
+    const health = Number(publicStats.characterHealth);
+    statsPayload = {
+      ...publicStats,
+      characterHealth: Number.isFinite(health) ? health : 100,
+    };
+  }
+
+  const localStats = calculateProfileStats({
+    ...cachedLocalStore,
+    sessions: cachedSessions,
+  });
+  const stats = mergePublicProfileIntoStats(
+    localStats,
+    asProfileRow(statsPayload, cachedUserDoc)
+  );
+  renderProfileStats(profileRoot, stats, {
+    characterId: loadSelectedCharacterId(),
+    username: cachedUserDoc?.username || "You",
+  });
+  renderHistory(cachedSessions);
+}
+
 async function refresh() {
   const localStore = await loadProfileStoreAsync();
+  cachedLocalStore = localStore;
   let sessions = localStore.sessions || [];
   if (isCloudConfigured()) {
     try {
@@ -81,11 +124,7 @@ async function refresh() {
       // Keep local copy if signed out or offline.
     }
   }
-
-  const localStats = calculateProfileStats({
-    ...localStore,
-    sessions,
-  });
+  cachedSessions = sessions;
 
   let publicStats = null;
   let userDoc = null;
@@ -95,21 +134,32 @@ async function refresh() {
   } catch {
     // Use local stats only.
   }
+  cachedUserDoc = userDoc;
+  paintStats(publicStats);
+}
 
-  const stats = mergePublicProfileIntoStats(
-    localStats,
-    asProfileRow(publicStats, userDoc)
-  );
-  renderProfileStats(profileRoot, stats, {
-    characterId: loadSelectedCharacterId(),
-    username: userDoc?.username || "You",
-  });
-  renderHistory(sessions);
+async function bindLivePublicStats() {
+  if (unsubPublicStats) {
+    unsubPublicStats();
+    unsubPublicStats = null;
+  }
+  if (!isCloudConfigured()) return;
+  try {
+    unsubPublicStats = await listenOwnPublicStats((publicStats) => {
+      if (!cachedLocalStore) return;
+      paintStats(publicStats);
+    });
+  } catch (err) {
+    console.warn("[Focus Buddy] Could not listen for live character health:", err);
+  }
 }
 
 await bootCloudSync();
 if (isCloudConfigured()) {
-  await listenAuth(() => refresh());
+  await listenAuth(async () => {
+    await refresh();
+    await bindLivePublicStats();
+  });
 } else {
   refresh();
 }

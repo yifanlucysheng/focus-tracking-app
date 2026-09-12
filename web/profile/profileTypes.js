@@ -37,8 +37,9 @@
  *
  * @typedef {Object} ProfileStatsView
  * @property {boolean} hasSessions
- * @property {number} characterHealth - 0–100
+ * @property {number} characterHealth - 0–100 (x/100; −1 HP per 1% off-task in the current/latest session)
  * @property {string} characterHealthLabel
+ * @property {boolean} [liveSessionActive] - true while a focus session is running and syncing health live
  * @property {number} focusStreakDays - Focus Streak (consecutive calendar days)
  * @property {string|null} [lastCompletedFocusDate]
  * @property {number} longestSessionMs

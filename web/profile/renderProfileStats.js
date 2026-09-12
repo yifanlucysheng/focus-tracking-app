@@ -53,7 +53,11 @@ export function renderProfileStats(root, stats, options = {}) {
       ? `No Focus Streak yet`
       : `${stats.focusStreakDays} day Focus Streak`;
 
-  const healthPct = emptyPrivate ? 0 : stats.characterHealth;
+  const showHealth = Boolean(stats.hasSessions || stats.liveSessionActive);
+  const healthPct = Math.max(
+    0,
+    Math.min(100, Math.floor(Number(stats.characterHealth) || 0))
+  );
   const xpPct = Math.round(Math.min(1, Math.max(0, stats.xpProgress)) * 100);
 
   root.innerHTML = `
@@ -68,17 +72,23 @@ export function renderProfileStats(root, stats, options = {}) {
           <p class="profile-health-note">Make sure to stay on task to keep your companion healthy!</p>
           <p class="profile-health-label">
             Character Health
-            <span>${emptyPrivate ? "—" : `${healthPct}% · ${stats.characterHealthLabel}`}</span>
+            <span>${
+              showHealth
+                ? `${healthPct}/100 · ${stats.characterHealthLabel}`
+                : "—"
+            }</span>
           </p>
           <div
             class="profile-bar"
             role="progressbar"
             aria-valuemin="0"
             aria-valuemax="100"
-            aria-valuenow="${healthPct}"
+            aria-valuenow="${showHealth ? healthPct : 0}"
             aria-label="Character health"
           >
-            <div class="profile-bar-fill profile-bar-health" style="width: ${healthPct}%"></div>
+            <div class="profile-bar-fill profile-bar-health" style="width: ${
+              showHealth ? healthPct : 0
+            }%"></div>
           </div>
         </div>
       </div>

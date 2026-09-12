@@ -112,23 +112,36 @@ export function calculateTopProductiveSite(sessions) {
 }
 
 /**
- * Simple health: average on-task ratio of last few completed sessions.
- * Defaults to a calm resting value when empty (UI will still show empty copy).
+ * Session health: start at 100; every 1% of time spent off-task = −1 HP.
+ *
+ * @param {number} onTaskRatio 0–1
+ * @returns {number} 0–100
+ */
+export function characterHealthFromOnTaskRatio(onTaskRatio) {
+  const ratio = Math.min(1, Math.max(0, Number(onTaskRatio) || 0));
+  const offTaskPercent = Math.round((1 - ratio) * 100);
+  return Math.max(0, Math.min(100, 100 - offTaskPercent));
+}
+
+/**
+ * Character health from the latest completed session (same formula as live sessions).
+ * Empty history returns 100 so a new session can start full; UI may still show "—".
  *
  * @param {FocusSession[]} sessions
  * @returns {number} 0–100
  */
 export function calculateCharacterHealth(sessions) {
-  const recent = sessions.filter((s) => s.completed).slice(-5);
-  if (recent.length === 0) return 0;
+  const completed = sessions.filter((s) => s.completed);
+  if (completed.length === 0) return 100;
 
-  const ratios = recent.map((s) => {
-    if (typeof s.onTaskRatio === "number") return Math.min(1, Math.max(0, s.onTaskRatio));
-    return 0.5;
-  });
-
-  const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-  return Math.round(avg * 100);
+  const last = completed[completed.length - 1];
+  if (typeof last.onTaskRatio === "number") {
+    return characterHealthFromOnTaskRatio(last.onTaskRatio);
+  }
+  if (typeof last.onTaskPercent === "number") {
+    return characterHealthFromOnTaskRatio(last.onTaskPercent / 100);
+  }
+  return 100;
 }
 
 /**
@@ -184,6 +197,7 @@ export function calculateProfileStats(store, now = Date.now()) {
     hasSessions,
     characterHealth: health,
     characterHealthLabel: characterHealthLabel(health),
+    liveSessionActive: false,
     focusStreakDays: focusStreak,
     lastCompletedFocusDate: lastDay,
     longestSessionMs,

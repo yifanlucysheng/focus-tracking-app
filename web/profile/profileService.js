@@ -81,17 +81,17 @@ export function mergePublicProfileIntoStats(localStats, publicProfile) {
   const topProductiveSite = preferRemoteSummary
     ? publicProfile.top_productive_site ?? localStats.topProductiveSite
     : localStats.topProductiveSite ?? publicProfile.top_productive_site ?? null;
-  const characterHealth = preferRemoteSummary
-    ? Math.max(
-        0,
-        Math.min(
-          100,
-          Math.floor(
-            Number(publicProfile.character_health ?? localStats.characterHealth) ||
-              0
-          )
-        )
-      )
+  const liveSessionActive = Boolean(
+    publicProfile.live_session_active ?? publicProfile.liveSessionActive
+  );
+  const remoteHealthRaw = publicProfile.character_health ?? publicProfile.characterHealth;
+  const hasRemoteHealth =
+    remoteHealthRaw !== undefined &&
+    remoteHealthRaw !== null &&
+    Number.isFinite(Number(remoteHealthRaw));
+  // Prefer cloud health so mid-session live sync shows on the website immediately.
+  const characterHealth = hasRemoteHealth
+    ? Math.max(0, Math.min(100, Math.floor(Number(remoteHealthRaw))))
     : localStats.characterHealth;
 
   const hasSessions = Boolean(localStats.hasSessions || sessionsCompleted > 0);
@@ -99,6 +99,7 @@ export function mergePublicProfileIntoStats(localStats, publicProfile) {
   return {
     ...localStats,
     hasSessions,
+    liveSessionActive,
     level: use.level,
     xp: use.xp,
     focusStreakDays: focus_streak,

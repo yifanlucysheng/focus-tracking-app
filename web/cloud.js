@@ -198,6 +198,7 @@ export function summarizeSessionsForPublic(sessions, now = Date.now()) {
     topDistraction: summary.top_distraction ?? null,
     topProductiveSite: summary.top_productive_site ?? null,
     characterHealth: summary.character_health ?? 0,
+    liveSessionActive: false,
     updatedAt: now,
   };
 }
@@ -282,6 +283,14 @@ export async function acceptFriendRequest(fromUid) {
   await deleteDoc(doc(db, "friendRequests", uid, "incoming", fromUid));
 }
 
+export async function rejectFriendRequest(fromUid) {
+  const uid = currentUid();
+  if (!uid) throw new Error("Sign in first.");
+  await loadSdk();
+  const { doc, deleteDoc } = firestoreFns;
+  await deleteDoc(doc(db, "friendRequests", uid, "incoming", fromUid));
+}
+
 export async function listFriendIds() {
   const uid = currentUid();
   if (!uid) return [];
@@ -352,6 +361,36 @@ export async function loadOwnPublicStats() {
   if (snap.exists()) return snap.data();
   const sessions = await loadMySessions();
   return summarizeSessionsForPublic(sessions);
+}
+
+/**
+ * Live-listen to the signed-in user's public stats (e.g. mid-session character health).
+ * @param {(stats: object|null) => void} callback
+ * @returns {Promise<() => void>} unsubscribe
+ */
+export async function listenOwnPublicStats(callback) {
+  const uid = currentUid();
+  if (!uid) {
+    callback(null);
+    return () => {};
+  }
+  await loadSdk();
+  const { doc, onSnapshot } = firestoreFns;
+  if (typeof onSnapshot !== "function") {
+    const stats = await loadOwnPublicStats();
+    callback(stats);
+    return () => {};
+  }
+  return onSnapshot(
+    doc(db, "users", uid, "public", "stats"),
+    (snap) => {
+      callback(snap.exists() ? snap.data() : null);
+    },
+    (err) => {
+      console.warn("[Focus Buddy] Public stats listener failed:", err);
+      callback(null);
+    }
+  );
 }
 
 export async function saveNowPlaying(payload) {

@@ -130,7 +130,7 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
                               data-decline-request="${escapeHtml(req.id)}"
                               ${busy || requestActionId ? "disabled" : ""}
                             >
-                              Decline
+                              Deny
                             </button>
                           </div>
                         </li>
@@ -205,7 +205,7 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
                     ${escapeHtml(p.username)}${you ? " <span class='friends-you-tag'>(you)</span>" : ""}
                   </p>
                   <p class="friends-row-meta">
-                    Level ${p.focusLevel} · Streak ${p.focusStreak} · ${p.xp} XP
+                    level ${p.focusLevel} · ${p.focusStreak} day streak · ${p.xp} xp
                   </p>
                 </div>
               </li>
