@@ -40,6 +40,24 @@
             <input id="status-input" class="field-input" type="text" maxlength="40" placeholder="grinding, on a break…" />
             <button id="save-status-btn" class="btn btn-secondary btn-small" type="button">Save status</button>
           </div>
+        </div>
+
+        <div id="folders-panel" class="dash-panel">
+          <p class="field-label">Folders</p>
+          <p class="folders-hint">Create subject folders, then save sites into them. Click a folder to open its tabs. Type that name in the extension task field to open them on lock-in too.</p>
+          <div id="folder-buttons" class="folder-buttons"></div>
+          <div class="folder-add-row">
+            <input id="new-folder-name" class="field-input" type="text" placeholder="New folder name" />
+            <button id="add-folder-btn" class="btn btn-secondary btn-small" type="button">Add folder</button>
+          </div>
+          <p class="folders-hint">Save this page (or paste a URL) into folders:</p>
+          <input id="folder-site-url" class="field-input" type="url" placeholder="https://example.com" />
+          <div id="folder-checks" class="folder-checks"></div>
+          <button id="save-folder-site-btn" class="btn btn-secondary btn-small" type="button">Save site to checked folders</button>
+          <p id="folders-status" class="sites-status" aria-live="polite"></p>
+        </div>
+
+        <div id="signed-in-more" class="settings-grid" hidden>
           <div class="dash-panel">
             <p class="field-label">Privacy</p>
             <label class="toggle-row">
@@ -58,6 +76,40 @@
             <button id="spotify-connect-btn" class="btn btn-secondary" type="button">Connect Spotify</button>
             <button id="spotify-disconnect-btn" class="btn btn-secondary btn-small" type="button">Disconnect</button>
           </div>
+        </div>
+
+        <div class="settings-grid sites-settings">
+          <div class="dash-panel dash-sites">
+            <label class="field-label" for="block-site-input">Specific sites you want to block?</label>
+            <div class="site-row">
+              <input
+                id="block-site-input"
+                class="field-input"
+                type="url"
+                placeholder="https://youtube.com"
+                autocomplete="off"
+              />
+              <button id="add-block-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+            </div>
+            <ul id="block-site-list" class="site-list" aria-live="polite"></ul>
+          </div>
+
+          <div class="dash-panel dash-allow">
+            <label class="field-label" for="allow-site-input">Always Allow</label>
+            <div class="site-row">
+              <input
+                id="allow-site-input"
+                class="field-input"
+                type="url"
+                placeholder="https://docs.google.com"
+                autocomplete="off"
+              />
+              <button id="add-allow-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+            </div>
+            <ul id="allow-site-list" class="site-list" aria-live="polite"></ul>
+          </div>
+
+          <p id="sites-status" class="sites-status" aria-live="polite"></p>
         </div>
       </section>
     </main>

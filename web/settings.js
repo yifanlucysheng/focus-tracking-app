@@ -14,6 +14,8 @@ import {
   loadSpotifyTokens,
 } from "./cloud.js";
 import { connectSpotify, isSpotifyConfigured, publishNowPlaying } from "./spotify.js";
+import { initFoldersPanel } from "./foldersPanel.js";
+import { initSiteLists } from "./siteLists.js";
 
 mountSiteNav("settings");
 mountSectionDivider("Settings");
@@ -21,6 +23,7 @@ mountSectionDivider("Settings");
 const banner = document.getElementById("settings-banner");
 const signedOut = document.getElementById("signed-out-panel");
 const signedIn = document.getElementById("signed-in-panel");
+const signedInMore = document.getElementById("signed-in-more");
 const usernameLabel = document.getElementById("settings-username");
 const statusInput = document.getElementById("status-input");
 const shareStats = document.getElementById("share-stats-toggle");
@@ -34,6 +37,7 @@ function setBanner(text) {
 function setSignedIn(on) {
   if (signedOut) signedOut.hidden = Boolean(on);
   if (signedIn) signedIn.hidden = !on;
+  if (signedInMore) signedInMore.hidden = !on;
 }
 
 async function refreshSpotifyLabel() {
@@ -147,6 +151,8 @@ document.getElementById("spotify-disconnect-btn")?.addEventListener("click", asy
 });
 
 const bootNote = await bootCloudSync();
+initFoldersPanel();
+initSiteLists();
 if (!isCloudConfigured()) {
   setBanner(bootNote);
 } else {

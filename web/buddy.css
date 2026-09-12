@@ -1078,6 +1078,71 @@ body {
   gap: 18px;
 }
 
+.sites-settings {
+  margin-top: 24px;
+}
+
+#folders-panel {
+  margin: 18px 0;
+}
+
+.folder-buttons,
+.folder-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.folder-chip {
+  display: inline-flex;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--cream);
+}
+
+.folder-open-btn,
+.folder-delete-btn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.folder-open-btn {
+  padding: 8px 14px;
+  background: var(--cream);
+  color: var(--focus);
+}
+
+.folder-delete-btn {
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--buddy);
+}
+
+.folder-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0 16px;
+}
+
+.folder-add-row .field-input {
+  flex: 1;
+  min-width: 180px;
+  margin: 0;
+}
+
+.folder-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+
 .settings-grid .field-input,
 .signed-out-panel .field-input,
 #signed-out-panel .field-input {
