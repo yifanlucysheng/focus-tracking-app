@@ -1,29 +1,22 @@
 (() => {
-  if (window.__focusBuddyOverlayInit) return;
+  // Bump version so re-inject replaces older overlay copies that crashed on chrome.storage.
+  const OVERLAY_VERSION = 3;
+  if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
+  window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
 
   const HOST_ID = "focus-buddy-overlay-host";
 
-  function hasRuntime() {
-    return typeof chrome !== "undefined" && !!chrome.runtime?.getURL;
-  }
-
-  function hasStorage() {
-    return (
-      typeof chrome !== "undefined" &&
-      !!chrome.storage?.local &&
-      typeof chrome.storage.onChanged?.addListener === "function"
-    );
-  }
-
   function bunnyUrl(mood) {
     const file = mood === "distracted" ? "angrybunny.png" : "sleepbunny.png";
-    if (!hasRuntime()) return file;
     try {
-      return chrome.runtime.getURL(file);
+      if (typeof chrome !== "undefined" && chrome.runtime?.getURL) {
+        return chrome.runtime.getURL(file);
+      }
     } catch {
-      return file;
+      // Extension context invalidated.
     }
+    return file;
   }
 
   function getImg() {
@@ -90,24 +83,13 @@
 
   function setMood(mood) {
     const img = getImg();
-    if (img) img.src = bunnyUrl(mood);
+    if (img) img.src = bunnyUrl(mood || "on-task");
   }
 
   function showOverlay(animate, mood) {
     const host = ensureHost();
     const img = host.shadowRoot.querySelector("img");
-
-    if (mood) {
-      img.src = bunnyUrl(mood);
-    } else if (hasStorage()) {
-      chrome.storage.local.get("characterMood").then((result) => {
-        img.src = bunnyUrl(result.characterMood);
-      }).catch(() => {
-        img.src = bunnyUrl("on-task");
-      });
-    } else {
-      img.src = bunnyUrl("on-task");
-    }
+    img.src = bunnyUrl(mood || "on-task");
 
     img.classList.remove("fall", "rest");
     if (animate) {
@@ -130,32 +112,23 @@
     document.getElementById(HOST_ID)?.remove();
   }
 
-  if (hasStorage()) {
-    try {
-      chrome.storage.onChanged.addListener((changes, area) => {
-        if (area !== "local") return;
-        if (changes.lockInActive && changes.lockInActive.newValue === false) {
-          hideOverlay();
+  // Do not use chrome.storage here — it is undefined in some page contexts and
+  // previously crashed with "Cannot read properties of undefined (reading 'onChanged')".
+  // Mood / show / hide are driven only by background messages.
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime?.onMessage?.addListener) {
+      chrome.runtime.onMessage.addListener((message) => {
+        if (message?.type === "OVERLAY_FALL") {
+          showOverlay(true, message.mood);
         }
-        if (changes.characterMood) {
-          setMood(changes.characterMood.newValue);
+        if (message?.type === "OVERLAY_SHOW") {
+          showOverlay(false, message.mood);
         }
+        if (message?.type === "OVERLAY_HIDE") hideOverlay();
+        if (message?.type === "OVERLAY_MOOD") setMood(message.mood);
       });
-    } catch {
-      // Extension context may be invalidated after reload; messages still work.
     }
-  }
-
-  if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message?.type === "OVERLAY_FALL") {
-        showOverlay(true, message.mood);
-      }
-      if (message?.type === "OVERLAY_SHOW") {
-        showOverlay(false, message.mood);
-      }
-      if (message?.type === "OVERLAY_HIDE") hideOverlay();
-      if (message?.type === "OVERLAY_MOOD") setMood(message.mood);
-    });
+  } catch {
+    // Extension context invalidated after reload.
   }
 })();
