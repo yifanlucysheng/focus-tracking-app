@@ -220,6 +220,14 @@ export async function sendFriendRequest(username) {
   const otherUid = await findUidByUsername(username);
   if (!otherUid) throw new Error("No account with that username.");
   if (otherUid === uid) throw new Error("You cannot add yourself.");
+
+  const incoming = await listIncomingRequests();
+  const alreadyAsked = incoming.find((req) => (req.fromUid || req.id) === otherUid);
+  if (alreadyAsked) {
+    await acceptFriendRequest(alreadyAsked.fromUid || alreadyAsked.id);
+    return { accepted: true };
+  }
+
   const me = await loadUserDoc(uid);
   await loadSdk();
   const { doc, setDoc } = firestoreFns;
@@ -228,6 +236,7 @@ export async function sendFriendRequest(username) {
     fromUsername: me?.username || "friend",
     createdAt: Date.now(),
   });
+  return { sent: true };
 }
 
 export async function listIncomingRequests() {

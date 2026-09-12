@@ -64,7 +64,17 @@ service cloud.firestore {
 
     match /friends/{uid}/accepted/{otherUid} {
       allow read: if isOwner(uid) || request.auth.uid == otherUid;
-      allow create, delete: if isOwner(uid);
+      allow create: if signedIn() && (
+        isOwner(uid)
+        || (
+          request.auth.uid == otherUid
+          && (
+            exists(/databases/$(database)/documents/friendRequests/$(otherUid)/incoming/$(uid))
+            || exists(/databases/$(database)/documents/friends/$(otherUid)/accepted/$(uid))
+          )
+        )
+      );
+      allow delete: if isOwner(uid) || request.auth.uid == otherUid;
       allow update: if false;
     }
 

@@ -97,50 +97,48 @@ async function refresh() {
   const view = buildLeaderboardView(comparable, you.id, leaderboardMode);
 
   const requests = await listIncomingRequests();
-  const requestNote = requests.length
-    ? `Requests: ${requests.map((r) => r.fromUsername).join(", ")}`
-    : "";
 
   renderFriendsLeaderboard(friendsRoot, view, {
+    incomingRequests: requests,
     demoNotice:
-      requestNote ||
-      "Friends only see stats you allow in Settings. Hidden stats stay hidden on the server too.",
+      "Add a friend by username once. They only need to tap Accept — they should not type your name back.",
     onModeChange: (mode) => {
       leaderboardMode = mode;
       refresh();
     },
     onAddFriend: async (username) => {
       try {
-        await sendFriendRequest(username);
+        const result = await sendFriendRequest(username);
         const note = friendsRoot.querySelector(".friends-demo-note");
-        if (note) note.textContent = "Friend request sent.";
+        if (note) {
+          note.textContent = result?.accepted
+            ? "They already asked you — you're friends now."
+            : "Friend request sent. They can Accept it without typing your username.";
+        }
+        if (result?.accepted) refresh();
       } catch (error) {
         const note = friendsRoot.querySelector(".friends-demo-note");
         if (note) note.textContent = error.message;
       }
     },
+    onAcceptRequest: async (fromUid, button) => {
+      if (button) button.disabled = true;
+      try {
+        await acceptFriendRequest(fromUid);
+        await refresh();
+      } catch (error) {
+        if (button) button.disabled = false;
+        const note = friendsRoot.querySelector(".friends-demo-note");
+        if (note) {
+          note.textContent =
+            error.message ||
+            "Could not accept. Publish the latest firestore.rules in Firebase Console, then try again.";
+        }
+      }
+    },
   });
 
-  if (requests.length) {
-    const extra = document.createElement("div");
-    extra.className = "dash-panel";
-    extra.innerHTML = requests
-      .map(
-        (req) =>
-          `<p class="friends-row-meta">${req.fromUsername} wants to be friends.
-           <button type="button" class="btn btn-secondary btn-small" data-accept="${req.fromUid || req.id}">Accept</button></p>`
-      )
-      .join("");
-    friendsRoot.prepend(extra);
-    extra.querySelectorAll("[data-accept]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        await acceptFriendRequest(button.getAttribute("data-accept"));
-        refresh();
-      });
-    });
-  }
-
-  friendsRoot.querySelectorAll(".friends-row-meta").forEach((meta, index) => {
+  friendsRoot.querySelectorAll(".friends-leaderboard .friends-row-meta").forEach((meta, index) => {
     const entry = view.entries[index];
     const friend = friends.find((item) => item.id === entry?.profile.id);
     if (!friend) return;

@@ -889,6 +889,7 @@ body {
 }
 
 .friends-add-card,
+.friends-requests-card,
 .friends-summary-card {
   background: rgba(247, 239, 216, 0.45);
   border: 1px solid rgba(100, 108, 166, 0.22);
@@ -1046,6 +1047,16 @@ body {
   margin: 4px 0 0;
   color: var(--buddy);
   font-size: 14px;
+}
+
+.friend-request-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 16px;
 }
 
 @media (max-width: 900px) {

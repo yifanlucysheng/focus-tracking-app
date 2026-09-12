@@ -4,7 +4,7 @@ export const CHARACTERS = {
     alt: "Cat buddy",
     name: "Cat Buddy",
     blurb:
-      "Your ordinary house cat — scarf and all. Cat Buddy treats every assignment like a sunbeam: sit still, stay close, and swat you (gently) if you wander off to a distracting tab.",
+      "Your ordinary house cat. Cat Buddy treats every assignment like a sunbeam: sit still, stay close, and will be very VERY upset if you wander off to a distracting tab.",
   },
   sleepbunny: {
     src: "../assets/sleepbunny.png",

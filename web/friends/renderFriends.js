@@ -27,6 +27,8 @@ function rankClass(rank) {
  * @param {{
  *   onModeChange?: (mode: LeaderboardMode) => void,
  *   onAddFriend?: (username: string) => void,
+ *   onAcceptRequest?: (fromUid: string) => void,
+ *   incomingRequests?: { id?: string, fromUid?: string, fromUsername?: string }[],
  *   demoNotice?: string,
  * }} [handlers]
  */
@@ -35,9 +37,30 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
 
   const top = view.topFriend;
   const mode = view.mode;
+  const incoming = Array.isArray(handlers.incomingRequests) ? handlers.incomingRequests : [];
+
+  const requestsHtml = incoming.length
+    ? `
+      <div class="friends-requests-card">
+        <p class="field-label">Friend requests</p>
+        <p class="folders-hint">Tap Accept — you do not need to type their username.</p>
+        ${incoming
+          .map((req) => {
+            const fromUid = req.fromUid || req.id || "";
+            const name = req.fromUsername || "Someone";
+            return `<div class="friend-request-row">
+              <span><strong>${name}</strong> wants to be friends.</span>
+              <button type="button" class="btn btn-secondary btn-small" data-accept="${fromUid}">Accept</button>
+            </div>`;
+          })
+          .join("")}
+      </div>
+    `
+    : "";
 
   root.innerHTML = `
     <div class="friends-layout">
+      ${requestsHtml}
       <div class="friends-add-card">
         <label class="field-label" for="friend-username-input">Add Friend</label>
         <div class="friends-add-row">
@@ -144,5 +167,12 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
       const username = input.value.trim();
       if (handlers.onAddFriend) handlers.onAddFriend(username);
     }
+  });
+
+  root.querySelectorAll("[data-accept]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const fromUid = button.getAttribute("data-accept");
+      if (fromUid && handlers.onAcceptRequest) handlers.onAcceptRequest(fromUid, button);
+    });
   });
 }
