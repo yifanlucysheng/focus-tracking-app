@@ -105,6 +105,7 @@ copyFile("assets/cat4.png", "cat4.png");
 copyFile("assets/cat5.png", "cat5.png");
 copyFile("assets/cat6.png", "cat6.png");
 copyFile("assets/cat7.png", "cat7.png");
+fs.cpSync(path.join(root, "web"), path.join(outDir, "web"), { recursive: true });
 
 // Popup ES modules import these (Friends activity + cloud sync).
 const popupWebModules = [
