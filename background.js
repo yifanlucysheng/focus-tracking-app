@@ -59,30 +59,60 @@ async function writeTimer(state) {
   return state;
 }
 
+function domainFromLogEntry(entry) {
+  if (!entry || typeof entry !== "object") return "";
+  if (typeof entry.domain === "string" && entry.domain) {
+    return hostnameOf(entry.domain);
+  }
+  if (entry.url) return hostnameOf(entry.url);
+  return "";
+}
+
 function summarizeFocusLog(log, startedAt, endedAt) {
   const entries = Array.isArray(log)
     ? [...log].filter((item) => item && typeof item.timestamp === "number")
     : [];
   entries.sort((a, b) => a.timestamp - b.timestamp);
 
-  const points = [{ status: "on-task", timestamp: startedAt }, ...entries];
-  const lastStatus = points[points.length - 1]?.status || "on-task";
-  points.push({ status: lastStatus, timestamp: endedAt });
+  const firstDomain = domainFromLogEntry(entries[0]);
+  const points = [
+    { status: "on-task", timestamp: startedAt, domain: firstDomain },
+    ...entries.map((item) => ({
+      status: item.status,
+      timestamp: item.timestamp,
+      domain: domainFromLogEntry(item),
+    })),
+  ];
+  const last = points[points.length - 1] || { status: "on-task", domain: "" };
+  points.push({
+    status: last.status || "on-task",
+    timestamp: endedAt,
+    domain: last.domain || "",
+  });
 
   let onTaskMs = 0;
   let distractedMs = 0;
   let switches = 0;
   let prev = "on-task";
+  const distractionDomains = {};
+  const productiveDomains = {};
 
   for (let i = 0; i < points.length - 1; i += 1) {
     const current = points[i];
     const next = points[i + 1];
     const status = current.status === "distracted" ? "distracted" : "on-task";
     const delta = Math.max(0, next.timestamp - current.timestamp);
+    const domain = current.domain || next.domain || "";
     if (status === "distracted") distractedMs += delta;
     else onTaskMs += delta;
     if (status === "distracted" && prev !== "distracted") switches += 1;
     prev = status;
+    if (!domain || delta <= 0) continue;
+    if (status === "distracted") {
+      distractionDomains[domain] = (distractionDomains[domain] || 0) + delta;
+    } else {
+      productiveDomains[domain] = (productiveDomains[domain] || 0) + delta;
+    }
   }
 
   const durationMs = Math.max(1000, endedAt - startedAt);
@@ -93,6 +123,8 @@ function summarizeFocusLog(log, startedAt, endedAt) {
     onTaskRatio,
     onTaskPercent: Math.round(onTaskRatio * 100),
     distractionSwitches: switches,
+    distractionDomains,
+    productiveDomains,
   };
 }
 
@@ -153,6 +185,8 @@ async function finalizeSession() {
     onTaskRatio: stats.onTaskRatio,
     onTaskPercent: stats.onTaskPercent,
     distractionSwitches: stats.distractionSwitches,
+    distractionDomains: stats.distractionDomains,
+    productiveDomains: stats.productiveDomains,
   };
 
   const pending = Array.isArray(stored[PENDING_SESSIONS_KEY])
@@ -451,12 +485,25 @@ async function saveKeywords(keywords) {
   await chrome.storage.local.set({ [KEYWORDS_KEY]: keywords });
 }
 
-async function appendFocusLog(status) {
+async function appendFocusLog(status, tab) {
   const result = await chrome.storage.local.get(FOCUS_LOG_KEY);
   const focusLog = Array.isArray(result[FOCUS_LOG_KEY])
     ? result[FOCUS_LOG_KEY]
     : [];
-  focusLog.push({ status, timestamp: Date.now() });
+  const url = tab?.url || "";
+  const domain = hostnameOf(url);
+  const skipHost =
+    !domain ||
+    domain === "newtab" ||
+    url.startsWith("chrome://") ||
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("about:");
+  focusLog.push({
+    status,
+    timestamp: Date.now(),
+    url: skipHost ? "" : url,
+    domain: skipHost ? "" : domain,
+  });
   await chrome.storage.local.set({ [FOCUS_LOG_KEY]: focusLog });
 }
 
@@ -471,8 +518,8 @@ function clearDistractedTimer() {
   }
 }
 
-async function applyTabStatus(status) {
-  await appendFocusLog(status);
+async function applyTabStatus(status, tab) {
+  await appendFocusLog(status, tab);
 
   if (status === "on-task") {
     clearDistractedTimer();
@@ -485,7 +532,7 @@ async function applyTabStatus(status) {
   distractedTimerId = setTimeout(async () => {
     distractedTimerId = null;
     const current = await classifyActiveTab();
-    if (current === "distracted") {
+    if (current.status === "distracted") {
       await setCharacterMood("distracted");
     }
   }, DISTRACTED_DELAY_MS);
@@ -687,13 +734,14 @@ async function classifyTab(tab) {
 
 async function classifyActiveTab() {
   const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  return classifyTab(tabs[0]);
+  const tab = tabs[0];
+  return { tab, status: await classifyTab(tab) };
 }
 
 async function evaluateActiveTab() {
-  const status = await classifyActiveTab();
+  const { tab, status } = await classifyActiveTab();
   if (status) {
-    await applyTabStatus(status);
+    await applyTabStatus(status, tab);
   }
 }
 
@@ -897,6 +945,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!tab.active) return;
   const status = await classifyTab(tab);
   if (status) {
-    await applyTabStatus(status);
+    await applyTabStatus(status, tab);
   }
 });

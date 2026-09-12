@@ -5,73 +5,103 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <details id="timer-dropdown">
-      <summary>Timer</summary>
-      <div id="timer-section">
-        <div id="timer-display">25:00</div>
-        <div class="duration-picker">
-          <label>
-            <input id="duration-hours" type="number" min="0" max="23" value="0" />
-            hr
-          </label>
-          <label>
-            <input id="duration-minutes" type="number" min="0" max="59" value="25" />
-            min
-          </label>
-          <label>
-            <input id="duration-seconds" type="number" min="0" max="59" value="0" />
-            sec
-          </label>
-        </div>
-        <div class="timer-actions">
-          <button id="start-timer-btn" type="button">Start timer</button>
-          <button id="end-timer-btn" type="button" hidden>End timer</button>
-        </div>
-      </div>
-    </details>
-
-    <details id="folders-dropdown">
-      <summary>Folders</summary>
-      <div id="folders-section">
-        <p class="folders-hint">Click a folder to open its sites. Type that name in task to open them on lock-in too.</p>
-        <div id="folder-buttons"></div>
-        <div class="folder-add-row">
-          <input id="new-folder-name" type="text" placeholder="New folder name" />
-          <button id="add-folder-btn" type="button">Add folder</button>
-        </div>
-        <p class="folders-hint">Save this page (or paste a URL) into folders:</p>
-        <input id="site-url" type="url" placeholder="https://example.com" />
-        <div id="folder-checks"></div>
-        <button id="save-site-btn" type="button">Save site to checked folders</button>
-      </div>
-    </details>
-
-    <div id="lock-in-row">
-      <button id="lock-in-btn" type="button" aria-pressed="false" aria-label="Toggle lock-in mode">
-        <img id="character-img" class="on-task" src="sleepbunny.png" alt="on-task" />
+    <div class="popup-brand">
+      <img class="popup-logo" src="logo.PNG" alt="Focus Buddy" />
+    </div>
+    <nav class="popup-tabs" role="tablist" aria-label="Extension pages">
+      <button
+        id="tab-home-btn"
+        type="button"
+        class="popup-tab is-active"
+        role="tab"
+        aria-selected="true"
+        aria-controls="home-panel"
+        data-tab="home"
+      >
+        Home
       </button>
-      <div class="lock-in-copy">
-        <p id="lock-in-hint">click to activate lock-in mode</p>
-        <div class="task-inline">
-          <label for="task-text">task:</label>
-          <input type="text" id="task-text" placeholder="e.g. chemistry homework" />
-          <button id="change-task-btn" type="button" hidden>change task</button>
+      <button
+        id="tab-activity-btn"
+        type="button"
+        class="popup-tab"
+        role="tab"
+        aria-selected="false"
+        aria-controls="activity-panel"
+        data-tab="activity"
+      >
+        Friends activity
+      </button>
+    </nav>
+
+    <div id="home-panel" class="popup-panel" role="tabpanel" aria-labelledby="tab-home-btn">
+      <details id="timer-dropdown">
+        <summary>Timer</summary>
+        <div id="timer-section">
+          <div id="timer-display">25:00</div>
+          <div class="duration-picker">
+            <label>
+              <input id="duration-hours" type="number" min="0" max="23" value="0" />
+              hr
+            </label>
+            <label>
+              <input id="duration-minutes" type="number" min="0" max="59" value="25" />
+              min
+            </label>
+            <label>
+              <input id="duration-seconds" type="number" min="0" max="59" value="0" />
+              sec
+            </label>
+          </div>
+          <div class="timer-actions">
+            <button id="start-timer-btn" type="button">Start timer</button>
+            <button id="end-timer-btn" type="button" hidden>End timer</button>
+          </div>
+        </div>
+      </details>
+
+      <details id="folders-dropdown">
+        <summary>Folders</summary>
+        <div id="folders-section">
+          <p class="folders-hint">Click a folder to open its sites. Type that name in task to open them on lock-in too.</p>
+          <div id="folder-buttons"></div>
+          <div class="folder-add-row">
+            <input id="new-folder-name" type="text" placeholder="New folder name" />
+            <button id="add-folder-btn" type="button">Add folder</button>
+          </div>
+          <p class="folders-hint">Save this page (or paste a URL) into folders:</p>
+          <input id="site-url" type="url" placeholder="https://example.com" />
+          <div id="folder-checks"></div>
+          <button id="save-site-btn" type="button">Save site to checked folders</button>
+        </div>
+      </details>
+
+      <div id="lock-in-row">
+        <button id="lock-in-btn" type="button" aria-pressed="false" aria-label="Toggle lock-in mode">
+          <img id="character-img" class="on-task" src="sleepbunny.png" alt="on-task" />
+        </button>
+        <div class="lock-in-copy">
+          <p id="lock-in-hint">click to activate lock-in mode</p>
+          <div class="task-inline">
+            <label for="task-text">task:</label>
+            <input type="text" id="task-text" placeholder="e.g. chemistry homework" />
+            <button id="change-task-btn" type="button" hidden>change task</button>
+          </div>
         </div>
       </div>
+
+      <div id="summary-section" hidden>
+        <p id="summary-text"></p>
+      </div>
+
+      <p class="dashboard-link-row">
+        <button id="open-dashboard-btn" type="button">Open dashboard</button>
+      </p>
     </div>
 
-    <div id="summary-section" hidden>
-      <p id="summary-text"></p>
-    </div>
-
-    <p class="dashboard-link-row">
-      <button id="open-dashboard-btn" type="button">Open dashboard</button>
-    </p>
-
-    <details id="activity-dropdown">
-      <summary>Friends activity</summary>
+    <div id="activity-panel" class="popup-panel" role="tabpanel" aria-labelledby="tab-activity-btn" hidden>
+      <p class="folders-hint popup-activity-hint">Status and music show only if your friends allow sharing.</p>
       <div id="popup-activity" class="popup-activity">Sign in on the dashboard Settings page to see friends.</div>
-    </details>
+    </div>
 
     <div id="end-timer-modal" hidden>
       <div class="end-timer-modal-card" role="dialog" aria-labelledby="end-timer-modal-title">

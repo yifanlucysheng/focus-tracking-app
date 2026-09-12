@@ -4,6 +4,7 @@ import { isCloudConfigured, listenAuth, loadFriendsActivity } from "./web/cloud.
 const LOG_POLL_MS = 10_000;
 const DEFAULT_SECONDS = 25 * 60;
 const TIMER_OPEN_KEY = "timerDropdownOpen";
+const POPUP_TAB_KEY = "popupActiveTab";
 
 const timerDropdown = document.getElementById("timer-dropdown");
 const timerDisplay = document.getElementById("timer-display");
@@ -21,6 +22,9 @@ const sessionStatsList = document.getElementById("session-stats-list");
 const sessionStatsNote = document.getElementById("session-stats-note");
 const sessionStatsCloseBtn = document.getElementById("session-stats-close-btn");
 const popupActivity = document.getElementById("popup-activity");
+const homePanel = document.getElementById("home-panel");
+const activityPanel = document.getElementById("activity-panel");
+const popupTabButtons = document.querySelectorAll(".popup-tab");
 const characterImg = document.getElementById("character-img");
 const lockInBtn = document.getElementById("lock-in-btn");
 const lockInHint = document.getElementById("lock-in-hint");
@@ -246,7 +250,26 @@ function toggleLockIn() {
   activateLockIn();
 }
 
-chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText"]).then((result) => {
+function setPopupTab(tab) {
+  const next = tab === "activity" ? "activity" : "home";
+  popupTabButtons.forEach((button) => {
+    const active = button.dataset.tab === next;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  if (homePanel) homePanel.hidden = next !== "home";
+  if (activityPanel) activityPanel.hidden = next !== "activity";
+}
+
+popupTabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const tab = button.dataset.tab === "activity" ? "activity" : "home";
+    setPopupTab(tab);
+    chrome.storage.local.set({ [POPUP_TAB_KEY]: tab });
+  });
+});
+
+chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText", POPUP_TAB_KEY]).then((result) => {
   applyStoredMood(result.characterMood);
   setLockInUi(result.lockInActive);
   if (typeof result.taskText === "string" && taskTextInput) {
@@ -255,6 +278,7 @@ chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "task
   if (timerDropdown) {
     timerDropdown.open = Boolean(result[TIMER_OPEN_KEY]);
   }
+  setPopupTab(result[POPUP_TAB_KEY]);
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -506,19 +530,32 @@ async function refreshPopupActivity() {
         popupActivity.textContent = "No friends yet. Add someone from the Friends page.";
         return;
       }
-      popupActivity.innerHTML = friends
+      popupActivity.innerHTML = `<ol class="popup-activity-list" aria-label="Friend activity">${friends
         .map((friend) => {
+          const avatar = friend.characterId === "cat" ? "assets/cat.png" : "sleepbunny.png";
           const stats = friend.shareStats && friend.stats
-            ? `${friend.stats.todayFocusPercent}% today · ${friend.stats.streakDays} streak`
+            ? `${friend.stats.todayFocusPercent ?? 0}% today · ${friend.stats.streakDays ?? 0} day streak`
             : "Stats hidden";
           const track =
             friend.shareListening && friend.listening?.isPlaying
-              ? ` · ${friend.listening.trackName}`
-              : "";
-          const status = friend.customStatus ? ` · ${friend.customStatus}` : "";
-          return `<p><strong>${friend.username}</strong>${status}<br />${stats}${track}</p>`;
+              ? `Listening to ${friend.listening.trackName}`
+              : friend.shareListening
+                ? "Not playing anything right now"
+                : "Listening hidden";
+          const status = friend.customStatus
+            ? `<p class="popup-activity-meta">${friend.customStatus}</p>`
+            : "";
+          return `<li class="popup-activity-row">
+            <img class="popup-activity-avatar" src="${avatar}" alt="" />
+            <div class="popup-activity-main">
+              <p class="popup-activity-name">${friend.username}</p>
+              ${status}
+              <p class="popup-activity-meta">${stats}</p>
+              <p class="popup-activity-meta">${track}</p>
+            </div>
+          </li>`;
         })
-        .join("");
+        .join("")}</ol>`;
     });
   } catch {
     popupActivity.textContent = "Could not load friend activity.";

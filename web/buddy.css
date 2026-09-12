@@ -129,10 +129,20 @@ body {
 }
 
 .subpage-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-family: "PP Mondwest", "Courier New", monospace;
   font-size: 36px;
   color: var(--focus);
   text-decoration: none;
+}
+
+.app-mark {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .subpage-bar .page-nav {
@@ -185,12 +195,11 @@ body {
 
 .logo-star {
   position: absolute;
-  top: 0.06em;
-  /* Sit tight against the end of "Focus" */
-  right: -0.18em;
-  width: 0.22em;
-  height: 0.22em;
-  fill: var(--focus);
+  top: 0.02em;
+  right: -0.28em;
+  width: 0.32em;
+  height: 0.32em;
+  object-fit: contain;
 }
 
 .tagline {

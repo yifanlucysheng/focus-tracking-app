@@ -115,6 +115,13 @@ export function calculateLongestSessionMs(sessions) {
   }, 0);
 }
 
+function sessionDomainBag(session, field) {
+  const snake = field === "distractionDomains" ? "distraction_domains" : "productive_domains";
+  const bag = session?.[field] || session?.[snake] || {};
+  if (bag && typeof bag === "object" && !Array.isArray(bag)) return bag;
+  return {};
+}
+
 /**
  * @param {FocusSession[]} sessions
  * @param {'distractionDomains' | 'productiveDomains'} field
@@ -125,10 +132,16 @@ function calculateTopDomain(sessions, field) {
   const totals = {};
 
   for (const session of sessions) {
-    const domains = session[field] || {};
+    const domains = sessionDomainBag(session, field);
     for (const [domain, count] of Object.entries(domains)) {
       if (!domain) continue;
       totals[domain] = (totals[domain] || 0) + (Number(count) || 0);
+    }
+    const fallbackKey = field === "distractionDomains" ? "topDistraction" : "topProductiveSite";
+    const fallbackSnake = field === "distractionDomains" ? "top_distraction" : "top_productive_site";
+    const fallback = session?.[fallbackKey] || session?.[fallbackSnake];
+    if (typeof fallback === "string" && fallback && !Object.keys(domains).length) {
+      totals[fallback] = (totals[fallback] || 0) + 1;
     }
   }
 
