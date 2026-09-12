@@ -7,7 +7,7 @@
  * @returns {string}
  */
 function avatarSrc(characterId) {
-  return characterId === "cat" ? "../assets/cat.png" : "../assets/sleepbunny.png";
+  return characterId === "cat" ? "/cat.png" : "/sleepbunny.png";
 }
 
 /**
@@ -28,6 +28,7 @@ function rankClass(rank) {
  *   onModeChange?: (mode: LeaderboardMode) => void,
  *   onAddFriend?: (username: string) => void,
  *   demoNotice?: string,
+ *   username?: string,
  * }} [handlers]
  */
 export function renderFriendsLeaderboard(root, view, handlers = {}) {
@@ -35,48 +36,54 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
 
   const top = view.topFriend;
   const mode = view.mode;
+  const who = (handlers.username || "You").trim() || "You";
+  const whose = `${who}'s`;
 
   root.innerHTML = `
     <div class="friends-layout">
-      <div class="friends-add-card">
-        <label class="field-label" for="friend-username-input">Add Friend</label>
-        <div class="friends-add-row">
-          <input
-            id="friend-username-input"
-            class="field-input"
-            type="text"
-            placeholder="Friend's username"
-            autocomplete="off"
-          />
-          <button id="add-friend-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+      <div class="friends-upper">
+        <div class="friends-add-card">
+          <label class="field-label" for="friend-username-input">Add Friend</label>
+          <div class="friends-add-row">
+            <input
+              id="friend-username-input"
+              class="field-input"
+              type="text"
+              placeholder="Friend's username"
+              autocomplete="off"
+            />
+            <button id="add-friend-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+          </div>
+          <p class="friends-demo-note">
+            ${
+              handlers.demoNotice ||
+              "Demo mode: friends are mock profiles for UI testing — this does not connect to real accounts yet."
+            }
+          </p>
         </div>
-        <p class="friends-demo-note">
-          ${
-            handlers.demoNotice ||
-            "Demo mode: friends are mock profiles for UI testing — this does not connect to real accounts yet."
-          }
-        </p>
+
+        <div class="friends-summary-grid">
+          <article class="friends-summary-card">
+            <p class="profile-kicker">${whose} Rank</p>
+            <p class="friends-summary-value">
+              #${view.yourRank || "—"} out of ${view.totalFriends} friends
+            </p>
+          </article>
+
+          <article class="friends-summary-card">
+            <p class="profile-kicker">Top Focus Friend</p>
+            <p class="friends-summary-value">
+              ${top ? top.username : "No friends yet"}
+            </p>
+          </article>
+        </div>
       </div>
 
-      <div class="friends-summary-grid">
-        <article class="friends-summary-card">
-          <p class="profile-kicker">Your Rank</p>
-          <p class="friends-summary-value">
-            You're #${view.yourRank || "—"} out of ${view.totalFriends} friends
-          </p>
-        </article>
+      <div class="friends-leaderboard-block">
+        <p class="friends-leaderboard-heading">Leaderboard</p>
+        <p class="friends-compare-msg">${view.comparisonMessage}</p>
 
-        <article class="friends-summary-card">
-          <p class="profile-kicker">Top Focus Friend</p>
-          <p class="friends-summary-value">
-            ${top ? top.username : "No friends yet"}
-          </p>
-        </article>
-      </div>
-
-      <p class="friends-compare-msg">${view.comparisonMessage}</p>
-
-      <div class="friends-mode-toggle" role="tablist" aria-label="Leaderboard mode">
+        <div class="friends-mode-toggle" role="tablist" aria-label="Leaderboard mode">
         <button
           type="button"
           class="friends-mode-btn ${mode === "level" ? "is-active" : ""}"
@@ -120,6 +127,7 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
           })
           .join("")}
       </ol>
+      </div>
     </div>
   `;
 

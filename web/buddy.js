@@ -7,22 +7,40 @@ import {
   currentUserAsFriend,
 } from "./friends/calculateLeaderboard.js";
 import { renderFriendsLeaderboard } from "./friends/renderFriends.js";
+import {
+  getCurrentProfile,
+  getSession,
+  onAuthStateChange,
+  signOut,
+} from "./auth/authService.js";
+import { mountAuthPage } from "./auth/renderAuth.js";
 
 const CHARACTERS = {
-  cat: {
-    src: "../assets/cat.png",
-    alt: "Cat buddy",
-  },
-  sleepbunny: {
-    src: "../assets/sleepbunny.png",
-    alt: "Sleep bunny buddy",
-  },
+  cat: { src: "/cat.png", alt: "" },
+  sleepbunny: { src: "/sleepbunny.png", alt: "" },
 };
 
+const authPage = document.getElementById("auth-page");
+const appDashboard = document.getElementById("app-dashboard");
+const authRoot = document.getElementById("auth-root");
+const signOutBtn = document.getElementById("sign-out-btn");
 const preview = document.getElementById("character-preview");
 const options = Array.from(document.querySelectorAll(".buddy-option"));
 const profileRoot = document.getElementById("profile-stats-root");
 const friendsRoot = document.getElementById("friends-root");
+
+const taskInput = document.getElementById("task-input");
+const blockSiteInput = document.getElementById("block-site-input");
+const addBlockSiteBtn = document.getElementById("add-block-site-btn");
+const blockSiteList = document.getElementById("block-site-list");
+const allowSiteInput = document.getElementById("allow-site-input");
+const addAllowSiteBtn = document.getElementById("add-allow-site-btn");
+const allowSiteList = document.getElementById("allow-site-list");
+const sitesStatus = document.getElementById("sites-status");
+
+/** @type {import('./auth/authService.js').ProfileRow|null} */
+let signedInProfile = null;
+let dashboardInitialized = false;
 
 const STORAGE_KEY = "focusBuddy.selectedCharacter";
 const BLOCK_SITES_KEY = "focusBuddy.blockSites";
@@ -36,6 +54,38 @@ let selectedCharacterId = "sleepbunny";
 let leaderboardMode = "level";
 /** @type {import('./friends/friendTypes.js').FriendProfile[]} */
 let demoExtraFriends = [];
+let blockSites = [];
+let allowSites = [];
+
+function applyCharacter(id) {
+  const character = CHARACTERS[id];
+  if (!character) return;
+
+  selectedCharacterId = id;
+
+  if (preview) {
+    preview.classList.add("is-switching");
+    window.setTimeout(() => {
+      preview.src = character.src;
+      preview.alt = character.alt;
+      preview.classList.remove("is-switching");
+    }, 120);
+  }
+
+  options.forEach((button) => {
+    const selected = button.dataset.character === id;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+  });
+
+  try {
+    localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Ignore.
+  }
+
+  if (dashboardInitialized) refreshProfileStats();
+}
 
 function loadDemoExtras() {
   try {
@@ -58,8 +108,25 @@ function saveDemoExtras() {
 function refreshProfileStats() {
   const store = loadProfileStore();
   const stats = calculateProfileStats(store);
-  renderProfileStats(profileRoot, stats, { characterId: selectedCharacterId });
+  const username = signedInProfile?.username || "You";
+  renderProfileStats(profileRoot, stats, {
+    characterId: selectedCharacterId,
+    username,
+  });
   refreshFriendsLeaderboard(stats);
+  updateSectionLabels(username);
+}
+
+/**
+ * @param {string} username
+ */
+function updateSectionLabels(username) {
+  const who = (username || "You").trim() || "You";
+  const whose = `${who}'s`;
+  const focusLabel = document.getElementById("focus-session-label");
+  const statsLabel = document.getElementById("stats-section-label");
+  if (focusLabel) focusLabel.textContent = `${whose} focus session`;
+  if (statsLabel) statsLabel.textContent = `${whose} stats`;
 }
 
 function refreshFriendsLeaderboard(stats) {
@@ -67,17 +134,18 @@ function refreshFriendsLeaderboard(stats) {
 
   const profileStats = stats || calculateProfileStats(loadProfileStore());
   const you = currentUserAsFriend({
-    level: profileStats.level,
-    xp: profileStats.xp,
-    focusStreakDays: profileStats.focusStreakDays,
+    level: signedInProfile?.focus_level ?? profileStats.level,
+    xp: signedInProfile?.xp ?? profileStats.xp,
+    focusStreakDays: signedInProfile?.focus_flame ?? profileStats.focusStreakDays,
     characterId: selectedCharacterId,
-    username: "You",
+    username: signedInProfile?.username ?? "You",
   });
 
   const group = [you, ...MOCK_FRIENDS, ...demoExtraFriends];
   const view = buildLeaderboardView(group, you.id, leaderboardMode);
 
   renderFriendsLeaderboard(friendsRoot, view, {
+    username: signedInProfile?.username || "You",
     onModeChange: (mode) => {
       leaderboardMode = mode;
       refreshFriendsLeaderboard(profileStats);
@@ -120,64 +188,6 @@ function refreshFriendsLeaderboard(stats) {
   });
 }
 
-function applyCharacter(id) {
-  const character = CHARACTERS[id];
-  if (!character || !preview) return;
-
-  selectedCharacterId = id;
-  preview.classList.add("is-switching");
-
-  window.setTimeout(() => {
-    preview.src = character.src;
-    preview.alt = character.alt;
-    preview.classList.remove("is-switching");
-  }, 120);
-
-  options.forEach((button) => {
-    const selected = button.dataset.character === id;
-    button.classList.toggle("is-selected", selected);
-    button.setAttribute("aria-selected", selected ? "true" : "false");
-  });
-
-  try {
-    localStorage.setItem(STORAGE_KEY, id);
-  } catch {
-    // Ignore storage errors in private browsing contexts.
-  }
-
-  refreshProfileStats();
-}
-
-options.forEach((button) => {
-  button.addEventListener("click", () => {
-    applyCharacter(button.dataset.character);
-  });
-});
-
-let initial = "sleepbunny";
-try {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && CHARACTERS[saved]) initial = saved;
-} catch {
-  // Keep default.
-}
-
-applyCharacter(initial);
-
-/* —— Dashboard: task + sites —— */
-
-const taskInput = document.getElementById("task-input");
-const blockSiteInput = document.getElementById("block-site-input");
-const addBlockSiteBtn = document.getElementById("add-block-site-btn");
-const blockSiteList = document.getElementById("block-site-list");
-const allowSiteInput = document.getElementById("allow-site-input");
-const addAllowSiteBtn = document.getElementById("add-allow-site-btn");
-const allowSiteList = document.getElementById("allow-site-list");
-const sitesStatus = document.getElementById("sites-status");
-
-let blockSites = [];
-let allowSites = [];
-
 function loadTask() {
   try {
     const saved = localStorage.getItem(TASK_KEY);
@@ -208,7 +218,6 @@ function readStoredList(key) {
 function loadSites() {
   blockSites = readStoredList(BLOCK_SITES_KEY);
   if (blockSites.length === 0) {
-    // Migrate older single-list data into the block list once.
     blockSites = readStoredList(LEGACY_SITES_KEY);
   }
   allowSites = readStoredList(ALLOW_SITES_KEY);
@@ -314,24 +323,116 @@ function addAllowSite() {
   });
 }
 
-taskInput?.addEventListener("change", saveTask);
-taskInput?.addEventListener("blur", saveTask);
-addBlockSiteBtn?.addEventListener("click", addBlockSite);
-addAllowSiteBtn?.addEventListener("click", addAllowSite);
-blockSiteInput?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    addBlockSite();
+function initDashboardOnce() {
+  if (dashboardInitialized) return;
+  dashboardInitialized = true;
+
+  options.forEach((button) => {
+    button.addEventListener("click", () => {
+      applyCharacter(button.dataset.character);
+    });
+  });
+
+  let initial = "sleepbunny";
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && CHARACTERS[saved]) initial = saved;
+  } catch {
+    // Keep default.
   }
-});
-allowSiteInput?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    addAllowSite();
+  applyCharacter(initial);
+
+  taskInput?.addEventListener("change", saveTask);
+  taskInput?.addEventListener("blur", saveTask);
+  addBlockSiteBtn?.addEventListener("click", addBlockSite);
+  addAllowSiteBtn?.addEventListener("click", addAllowSite);
+  blockSiteInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addBlockSite();
+    }
+  });
+  allowSiteInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addAllowSite();
+    }
+  });
+
+  loadTask();
+  loadSites();
+  loadDemoExtras();
+  refreshProfileStats();
+}
+
+function showAuthScreen() {
+  signedInProfile = null;
+  document.body.classList.remove("is-booting", "is-dashboard");
+  document.body.classList.add("is-auth-screen");
+  if (authPage) authPage.hidden = false;
+  if (appDashboard) appDashboard.hidden = true;
+
+  if (authRoot) {
+    mountAuthPage(authRoot, {
+      onAuthenticated(profile) {
+        showDashboard(profile);
+      },
+    });
+  }
+}
+
+/**
+ * @param {import('./auth/authService.js').ProfileRow} profile
+ */
+function showDashboard(profile) {
+  signedInProfile = profile;
+  document.body.classList.remove("is-booting", "is-auth-screen");
+  document.body.classList.add("is-dashboard");
+  if (authPage) authPage.hidden = true;
+  if (appDashboard) appDashboard.hidden = false;
+
+  initDashboardOnce();
+  refreshProfileStats();
+}
+
+async function resolveProfileFromSession() {
+  const session = await getSession();
+  if (!session?.user) return null;
+  return getCurrentProfile();
+}
+
+async function bootApp() {
+  try {
+    const profile = await resolveProfileFromSession();
+    if (profile) showDashboard(profile);
+    else showAuthScreen();
+  } catch (err) {
+    console.error("[Focus Buddy] Auth boot failed:", err);
+    showAuthScreen();
+  }
+
+  onAuthStateChange(async (session) => {
+    if (!session) {
+      showAuthScreen();
+      return;
+    }
+    try {
+      const profile = await getCurrentProfile();
+      if (profile) showDashboard(profile);
+      else showAuthScreen();
+    } catch {
+      showAuthScreen();
+    }
+  });
+}
+
+signOutBtn?.addEventListener("click", async () => {
+  try {
+    await signOut();
+    showAuthScreen();
+  } catch (err) {
+    console.error("[Focus Buddy] Sign out failed:", err);
   }
 });
 
-loadTask();
-loadSites();
-loadDemoExtras();
-refreshProfileStats();
+bootApp();

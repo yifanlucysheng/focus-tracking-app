@@ -7,23 +7,36 @@
 function characterMeta(characterId) {
   if (characterId === "cat") {
     return {
-      src: "../assets/cat.png",
-      alt: "Cat buddy",
+      src: "/cat.png",
+      alt: "",
       name: "Cat Buddy",
     };
   }
 
   return {
-    src: "../assets/sleepbunny.png",
-    alt: "Sleep bunny buddy",
+    src: "/sleepbunny.png",
+    alt: "",
     name: "Moon Buddy",
   };
 }
 
 /**
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+/**
  * @param {HTMLElement} root
  * @param {ProfileStatsView} stats
- * @param {{ characterId?: string }} [options]
+ * @param {{ characterId?: string, username?: string }} [options]
  */
 export function renderProfileStats(root, stats, options = {}) {
   if (!root) return;
@@ -31,11 +44,14 @@ export function renderProfileStats(root, stats, options = {}) {
   const characterId = options.characterId || "sleepbunny";
   const buddy = characterMeta(characterId);
   const empty = !stats.hasSessions;
+  const username = (options.username || "You").trim() || "You";
+  const who = escapeHtml(username);
+  const whose = `${who}'s`;
 
-  const streakText = empty
-    ? "No Focus Streak yet"
+  const streakHeadline = empty
+    ? `No Focus Streak yet`
     : stats.focusStreakDays <= 0
-      ? "Start your Focus Streak today"
+      ? `Start ${whose} Focus Streak today`
       : `${stats.focusStreakDays} day Focus Streak`;
 
   const healthPct = empty ? 0 : stats.characterHealth;
@@ -48,7 +64,7 @@ export function renderProfileStats(root, stats, options = {}) {
           <img class="profile-buddy-img" src="${buddy.src}" alt="${buddy.alt}" />
         </div>
         <div class="profile-buddy-meta">
-          <p class="profile-kicker">Your companion</p>
+          <p class="profile-kicker">${whose} companion</p>
           <h3 class="profile-buddy-name">${buddy.name}</h3>
           <p class="profile-health-note">Make sure to stay on task to keep your companion healthy!</p>
           <p class="profile-health-label">
@@ -68,8 +84,9 @@ export function renderProfileStats(root, stats, options = {}) {
         </div>
       </div>
 
-      <div class="profile-flame-card ${empty ? "is-empty" : ""}">
-        <p class="profile-flame-text">${streakText}</p>
+      <div class="profile-flame-card profile-card-tone-a ${empty ? "is-empty" : ""}">
+        <p class="profile-stat-label">${whose} Focus Streak</p>
+        <p class="profile-flame-text">${streakHeadline}</p>
         <p class="profile-flame-sub">
           ${
             empty
@@ -79,9 +96,9 @@ export function renderProfileStats(root, stats, options = {}) {
         </p>
       </div>
 
-      <div class="profile-level-card">
+      <div class="profile-level-card profile-card-tone-a">
         <div class="profile-level-head">
-          <p class="profile-kicker">Focus Level</p>
+          <p class="profile-kicker">${whose} Focus Level</p>
           <p class="profile-level-value">Level ${stats.level}</p>
         </div>
         <div
@@ -104,24 +121,24 @@ export function renderProfileStats(root, stats, options = {}) {
       </div>
 
       <div class="profile-stat-grid">
-        <article class="profile-stat-tile">
-          <p class="profile-stat-label">Longest Focus Session</p>
+        <article class="profile-stat-tile profile-card-tone-b">
+          <p class="profile-stat-label">${whose} Longest Focus Session</p>
           <p class="profile-stat-value">${empty ? "—" : stats.longestSessionLabel}</p>
           <p class="profile-stat-hint">${
-            empty ? "No focus sessions yet" : "Your longest completed session"
+            empty ? "No focus sessions yet" : "Longest completed session"
           }</p>
         </article>
 
-        <article class="profile-stat-tile">
-          <p class="profile-stat-label">Sessions Completed</p>
+        <article class="profile-stat-tile profile-card-tone-b">
+          <p class="profile-stat-label">${whose} Sessions Completed</p>
           <p class="profile-stat-value">${empty ? "0" : String(stats.sessionsCompleted)}</p>
           <p class="profile-stat-hint">${empty ? "No focus sessions yet" : "All-time completed sessions"}</p>
         </article>
 
-        <article class="profile-stat-tile">
-          <p class="profile-stat-label">Top Distraction</p>
+        <article class="profile-stat-tile profile-card-tone-b">
+          <p class="profile-stat-label">${whose} Top Distraction</p>
           <p class="profile-stat-value profile-stat-domain">${
-            empty || !stats.topDistraction ? "—" : stats.topDistraction
+            empty || !stats.topDistraction ? "—" : escapeHtml(stats.topDistraction)
           }</p>
           <p class="profile-stat-hint">${
             empty || !stats.topDistraction
@@ -130,10 +147,10 @@ export function renderProfileStats(root, stats, options = {}) {
           }</p>
         </article>
 
-        <article class="profile-stat-tile">
-          <p class="profile-stat-label">Top Productive Site</p>
+        <article class="profile-stat-tile profile-card-tone-b">
+          <p class="profile-stat-label">${whose} Top Productive Site</p>
           <p class="profile-stat-value profile-stat-domain">${
-            empty || !stats.topProductiveSite ? "—" : stats.topProductiveSite
+            empty || !stats.topProductiveSite ? "—" : escapeHtml(stats.topProductiveSite)
           }</p>
           <p class="profile-stat-hint">${
             empty || !stats.topProductiveSite

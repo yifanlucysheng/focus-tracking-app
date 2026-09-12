@@ -6,10 +6,37 @@
     <title>Focus Buddy</title>
     <link rel="stylesheet" href="buddy.css" />
   </head>
-  <body>
+  <body class="is-booting">
     <div class="top-bar" aria-hidden="true"></div>
 
-    <main class="page">
+    <!-- Shown only when signed out -->
+    <div id="auth-page" class="auth-page" hidden>
+      <div class="auth-page-inner">
+        <header class="auth-page-brand">
+          <h1 class="logo auth-page-logo">
+            <span class="logo-line">
+              <span class="logo-focus">Focus</span>
+              <svg class="logo-star" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z"
+                />
+              </svg>
+            </span>
+            <span class="logo-buddy-row auth-buddy-row">
+              <span class="logo-buddy">Buddy</span>
+              <img class="auth-buddy-side auth-buddy-left" src="/sleepbunny.png" alt="" />
+              <img class="auth-buddy-side auth-buddy-right" src="/cat.png" alt="" />
+            </span>
+          </h1>
+          <p class="tagline">A fun way to stay on task!</p>
+        </header>
+
+        <div id="auth-root" class="auth-root"></div>
+      </div>
+    </div>
+
+    <!-- Shown only when signed in -->
+    <main id="app-dashboard" class="page" hidden>
       <div class="intro-section">
         <header class="hero">
           <div class="brand">
@@ -25,7 +52,7 @@
               <span class="logo-buddy-row">
                 <span class="logo-buddy">Buddy</span>
                 <span class="preview" aria-live="polite">
-                  <img id="character-preview" src="../assets/sleepbunny.png" alt="Sleep bunny" />
+                  <img id="character-preview" src="/sleepbunny.png" alt="" />
                 </span>
               </span>
             </h1>
@@ -44,7 +71,7 @@
               aria-selected="false"
               aria-label="Choose cat buddy"
             >
-              <img src="../assets/cat.png" alt="" />
+              <img src="/cat.png" alt="" />
             </button>
             <button
               type="button"
@@ -54,14 +81,14 @@
               aria-selected="true"
               aria-label="Choose sleep bunny buddy"
             >
-              <img src="../assets/sleepbunny.png" alt="" />
+              <img src="/sleepbunny.png" alt="" />
             </button>
           </div>
         </section>
 
         <nav class="page-nav" aria-label="Page sections">
           <a class="page-nav-link" href="#focus-session">Focus session</a>
-          <a class="page-nav-link" href="#your-stats">Your stats</a>
+          <a class="page-nav-link" href="#your-stats">Stats</a>
           <a class="page-nav-link" href="#friends">Friends</a>
         </nav>
       </div>
@@ -79,7 +106,7 @@
               <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
             </svg>
           </span>
-          <span class="section-divider-label">Your focus session</span>
+          <span id="focus-session-label" class="section-divider-label">Focus session</span>
           <span class="section-divider-ornament" data-side="right">
             <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
               <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
@@ -152,7 +179,7 @@
               <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
             </svg>
           </span>
-          <span class="section-divider-label">Your stats</span>
+          <span id="stats-section-label" class="section-divider-label">Stats</span>
           <span class="section-divider-ornament" data-side="right">
             <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
               <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
@@ -197,6 +224,10 @@
         </div>
 
         <div id="friends-root" class="friends-root"></div>
+      </section>
+
+      <section class="signout-section" aria-label="Sign out">
+        <button id="sign-out-btn" class="btn btn-secondary signout-btn" type="button">Sign Out</button>
       </section>
     </main>
 
