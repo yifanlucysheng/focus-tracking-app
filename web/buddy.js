@@ -1,23 +1,16 @@
-const CHARACTERS = {
-  cat: {
-    src: "../assets/cat.png",
-    alt: "Cat buddy",
-  },
-  sleepbunny: {
-    src: "../assets/sleepbunny.png",
-    alt: "Sleep bunny buddy",
-  },
-};
+import { CHARACTERS, STORAGE_KEY, loadSelectedCharacterId } from "./characters.js";
+import { mountSiteNav } from "./layout.js";
 
 const preview = document.getElementById("character-preview");
 const options = Array.from(document.querySelectorAll(".buddy-option"));
 
-const STORAGE_KEY = "focusBuddy.selectedCharacter";
+let selectedCharacterId = loadSelectedCharacterId();
 
 function applyCharacter(id) {
   const character = CHARACTERS[id];
   if (!character || !preview) return;
 
+  selectedCharacterId = id;
   preview.classList.add("is-switching");
 
   window.setTimeout(() => {
@@ -45,12 +38,5 @@ options.forEach((button) => {
   });
 });
 
-let initial = "sleepbunny";
-try {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && CHARACTERS[saved]) initial = saved;
-} catch {
-  // Keep default.
-}
-
-applyCharacter(initial);
+mountSiteNav("home");
+applyCharacter(selectedCharacterId);
