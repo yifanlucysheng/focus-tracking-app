@@ -9,7 +9,7 @@ import {
   loadUserDoc,
   sendChatMessage,
 } from "./cloud.js";
-import { buddyVisualForHealth } from "./profile/characterHealthVisual.js";
+import { buddySrcForProfile } from "./profile/characterHealthVisual.js";
 import { publishNowPlaying } from "./spotify.js";
 
 mountSiteNav("activity");
@@ -40,8 +40,7 @@ let chatUnsub = null;
 let sending = false;
 
 function avatarSrc(friend) {
-  const health = friend?.stats?.characterHealth;
-  return buddyVisualForHealth(friend?.characterId, health ?? 100).src;
+  return buddySrcForProfile(friend);
 }
 
 function formatWeekly(ms) {

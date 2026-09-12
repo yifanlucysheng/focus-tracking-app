@@ -93,6 +93,13 @@ export async function syncProfileStats(userId, stats, sessionId, sessionDoc) {
     await setDoc(doc(db, "users", userId, "public", "stats"), payload, {
       merge: true,
     });
+    if (typeof payload.characterHealth === "number") {
+      await setDoc(
+        doc(db, "users", userId),
+        { characterHealth: payload.characterHealth },
+        { merge: true }
+      );
+    }
     await clearPendingSyncForUser(userId);
     return { id: userId, ...payload, ...(existing?.liveSessionActive ? {
       characterHealth: existing.characterHealth,
@@ -158,9 +165,46 @@ export async function syncLiveCharacterHealth(health, options = {}) {
     await setDoc(doc(db, "users", userId, "public", "stats"), payload, {
       merge: true,
     });
+    await setDoc(
+      doc(db, "users", userId),
+      { characterHealth },
+      { merge: true }
+    );
     return payload;
   } catch (err) {
     console.warn("[Focus Buddy] Live character health sync failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Persist the chosen companion so friends see the same icon.
+ * @param {string} characterId
+ */
+export async function syncSelectedCharacter(characterId) {
+  let auth;
+  try {
+    auth = getFirebaseAuth();
+  } catch {
+    return null;
+  }
+  if (!auth?.currentUser?.uid) {
+    await waitForSignedInUser(400);
+    try {
+      auth = getFirebaseAuth();
+    } catch {
+      return null;
+    }
+  }
+  const userId = auth?.currentUser?.uid;
+  if (!userId) return null;
+  const id = characterId === "cat" ? "cat" : "sleepbunny";
+  try {
+    const db = getFirebaseDb();
+    await setDoc(doc(db, "users", userId), { characterId: id }, { merge: true });
+    return { characterId: id };
+  } catch (err) {
+    console.warn("[Focus Buddy] Character sync failed:", err);
     return null;
   }
 }

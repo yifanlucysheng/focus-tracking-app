@@ -233,10 +233,11 @@ export async function getAcceptedFriends() {
  * Map a profiles row into the leaderboard FriendProfile shape.
  *
  * @param {ProfileRow} profile
- * @param {{ isCurrentUser?: boolean, characterId?: string }} [options]
+ * @param {{ isCurrentUser?: boolean, characterId?: string, characterHealth?: number }} [options]
  * @returns {import('./friendTypes.js').FriendProfile}
  */
 export function profileToFriendProfile(profile, options = {}) {
+  const health = Number(options.characterHealth ?? profile.character_health);
   return {
     id: profile.id,
     username: profile.username,
@@ -244,6 +245,9 @@ export function profileToFriendProfile(profile, options = {}) {
     xp: profile.xp ?? 0,
     focusStreak: profile.focus_streak ?? profile.focus_flame ?? 0,
     characterId: options.characterId || "sleepbunny",
+    characterHealth: Number.isFinite(health)
+      ? Math.max(0, Math.min(100, Math.floor(health)))
+      : 100,
     isCurrentUser: Boolean(options.isCurrentUser),
     isMock: false,
   };

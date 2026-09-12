@@ -147,7 +147,7 @@ export function buildLeaderboardView(profiles, userId, mode) {
 /**
  * Build the current-user FriendProfile from Personal Stats / Supabase profile values.
  *
- * @param {{ id?: string, level: number, xp: number, focusStreakDays: number, characterId?: string, username?: string }} stats
+ * @param {{ id?: string, level: number, xp: number, focusStreakDays: number, characterId?: string, characterHealth?: number, username?: string }} stats
  * @returns {FriendProfile}
  */
 export function currentUserAsFriend(stats) {
@@ -158,6 +158,9 @@ export function currentUserAsFriend(stats) {
     xp: stats.xp || 0,
     focusStreak: stats.focusStreakDays || 0,
     characterId: stats.characterId || "sleepbunny",
+    characterHealth: Number.isFinite(Number(stats.characterHealth))
+      ? Math.max(0, Math.min(100, Math.floor(Number(stats.characterHealth))))
+      : 100,
     isCurrentUser: true,
     isMock: false,
   };

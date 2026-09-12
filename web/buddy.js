@@ -1,5 +1,6 @@
 import { CHARACTERS, STORAGE_KEY, loadSelectedCharacterId } from "./characters.js";
 import { mountSiteNav } from "./layout.js";
+import { isCloudConfigured, updateUserDoc } from "./cloud.js";
 
 const preview = document.getElementById("character-preview");
 const bioName = document.getElementById("buddy-bio-name");
@@ -47,6 +48,10 @@ function applyCharacter(id) {
     );
   } catch {
     // Ignore if messaging is blocked.
+  }
+
+  if (isCloudConfigured()) {
+    void updateUserDoc({ characterId: id }).catch(() => {});
   }
 }
 

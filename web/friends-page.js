@@ -15,6 +15,7 @@ import {
   rejectFriendRequest,
   sendFriendRequest,
 } from "./cloud.js";
+import { SESSION_START_HEALTH } from "./profile/characterHealthVisual.js";
 import { buildLeaderboardView, currentUserAsFriend } from "./friends/calculateLeaderboard.js";
 import { renderFriendsLeaderboard } from "./friends/renderFriends.js";
 
@@ -145,6 +146,12 @@ function renderHandlers(handlers) {
   };
 }
 
+function clampHealth(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return SESSION_START_HEALTH;
+  return Math.max(0, Math.min(100, Math.floor(n)));
+}
+
 async function refresh() {
   if (!friendsRoot) return;
   const bootNote = isCloudConfigured()
@@ -159,6 +166,7 @@ async function refresh() {
       xp: stats.xp,
       focusStreakDays: stats.focusStreakDays,
       characterId: loadSelectedCharacterId(),
+      characterHealth: stats.characterHealth ?? SESSION_START_HEALTH,
       username: "You",
     });
     const view = buildLeaderboardView([you], you.id, leaderboardMode);
@@ -184,6 +192,7 @@ async function refresh() {
     xp: myStats.xp || 0,
     focusStreakDays: myStats.streakDays || 0,
     characterId: me?.characterId || loadSelectedCharacterId(),
+    characterHealth: clampHealth(me?.characterHealth ?? myStats.characterHealth),
     username: me?.username || "You",
   });
 
@@ -197,6 +206,7 @@ async function refresh() {
       xp: friend.stats?.xp || 0,
       focusStreak: friend.stats?.streakDays || 0,
       characterId: friend.characterId,
+      characterHealth: clampHealth(friend.characterHealth),
       isMock: false,
       hiddenStats: !friend.shareStats,
     })),

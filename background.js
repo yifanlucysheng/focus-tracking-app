@@ -243,8 +243,19 @@ async function broadcastBuddyVisual() {
 async function setSelectedCharacter(characterId) {
   const id = characterId === "cat" ? "cat" : "sleepbunny";
   await chrome.storage.local.set({ [SELECTED_CHARACTER_KEY]: id });
+  void persistSelectedCharacterToCloud(id);
   await broadcastBuddyVisual();
   return id;
+}
+
+async function persistSelectedCharacterToCloud(characterId) {
+  try {
+    await AUTH_READY;
+    if (!globalThis.FocusBuddyAuth?.syncSelectedCharacter) return;
+    await globalThis.FocusBuddyAuth.syncSelectedCharacter(characterId);
+  } catch {
+    // Signed out or Firebase not ready.
+  }
 }
 
 function resetHealthProgressState(seedStatus = null) {

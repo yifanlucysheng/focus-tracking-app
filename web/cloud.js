@@ -372,7 +372,10 @@ async function readFriendFacing(uid) {
   const view = {
     id: uid,
     username: user.username || "friend",
-    characterId: user.characterId || "sleepbunny",
+    characterId: user.characterId === "cat" ? "cat" : "sleepbunny",
+    characterHealth: Number.isFinite(Number(user.characterHealth))
+      ? Math.max(0, Math.min(100, Math.floor(Number(user.characterHealth))))
+      : null,
     customStatus: user.customStatus || "",
     shareStats: Boolean(user.shareStats),
     shareListening: Boolean(user.shareListening),
@@ -387,6 +390,13 @@ async function readFriendFacing(uid) {
     } catch {
       view.stats = null;
     }
+  }
+
+  if (view.characterHealth == null) {
+    const fromStats = Number(view.stats?.characterHealth);
+    view.characterHealth = Number.isFinite(fromStats)
+      ? Math.max(0, Math.min(100, Math.floor(fromStats)))
+      : 100;
   }
 
   if (user.shareListening) {

@@ -6,6 +6,7 @@
  * @property {number} xp
  * @property {number} focusStreak - Focus Streak value (from profiles.focus_streak)
  * @property {string} [characterId] - optional buddy icon: "cat" | "sleepbunny"
+ * @property {number} [characterHealth] - companion HP 0–100 for stage art
  * @property {boolean} [isCurrentUser]
  * @property {boolean} [isMock] - true for demo friends (easy to strip later)
  */

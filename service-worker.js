@@ -31787,6 +31787,13 @@ This typically indicates that your device does not have a healthy Internet conne
       await setDoc(doc(db2, "users", userId, "public", "stats"), payload, {
         merge: true
       });
+      if (typeof payload.characterHealth === "number") {
+        await setDoc(
+          doc(db2, "users", userId),
+          { characterHealth: payload.characterHealth },
+          { merge: true }
+        );
+      }
       await clearPendingSyncForUser(userId);
       return { id: userId, ...payload, ...existing?.liveSessionActive ? {
         characterHealth: existing.characterHealth,
@@ -31841,9 +31848,41 @@ This typically indicates that your device does not have a healthy Internet conne
       await setDoc(doc(db2, "users", userId, "public", "stats"), payload, {
         merge: true
       });
+      await setDoc(
+        doc(db2, "users", userId),
+        { characterHealth },
+        { merge: true }
+      );
       return payload;
     } catch (err) {
       console.warn("[Focus Buddy] Live character health sync failed:", err);
+      return null;
+    }
+  }
+  async function syncSelectedCharacter(characterId) {
+    let auth2;
+    try {
+      auth2 = getFirebaseAuth();
+    } catch {
+      return null;
+    }
+    if (!auth2?.currentUser?.uid) {
+      await waitForSignedInUser(400);
+      try {
+        auth2 = getFirebaseAuth();
+      } catch {
+        return null;
+      }
+    }
+    const userId = auth2?.currentUser?.uid;
+    if (!userId) return null;
+    const id = characterId === "cat" ? "cat" : "sleepbunny";
+    try {
+      const db2 = getFirebaseDb();
+      await setDoc(doc(db2, "users", userId), { characterId: id }, { merge: true });
+      return { characterId: id };
+    } catch (err) {
+      console.warn("[Focus Buddy] Character sync failed:", err);
       return null;
     }
   }
@@ -32174,7 +32213,8 @@ This typically indicates that your device does not have a healthy Internet conne
     syncLiveCharacterHealth,
     syncLiveCharacterHealthFromRatio,
     flushPendingPublicSync,
-    startIncomingChatWatch
+    startIncomingChatWatch,
+    syncSelectedCharacter
   };
   globalThis.FocusBuddyAuth = FocusBuddyAuth;
 })();
@@ -33955,8 +33995,19 @@ async function broadcastBuddyVisual() {
 async function setSelectedCharacter(characterId) {
   const id = characterId === "cat" ? "cat" : "sleepbunny";
   await chrome.storage.local.set({ [SELECTED_CHARACTER_KEY]: id });
+  void persistSelectedCharacterToCloud(id);
   await broadcastBuddyVisual();
   return id;
+}
+
+async function persistSelectedCharacterToCloud(characterId) {
+  try {
+    await AUTH_READY;
+    if (!globalThis.FocusBuddyAuth?.syncSelectedCharacter) return;
+    await globalThis.FocusBuddyAuth.syncSelectedCharacter(characterId);
+  } catch {
+    // Signed out or Firebase not ready.
+  }
 }
 
 function resetHealthProgressState(seedStatus = null) {

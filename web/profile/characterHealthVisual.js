@@ -113,3 +113,37 @@ export function buddyVisualForHealth(characterId, health = SESSION_START_HEALTH)
     name: "Moon Buddy",
   };
 }
+
+/**
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function clampHealthValue(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(100, Math.floor(n)));
+}
+
+/**
+ * Best-known companion HP from a friend / leaderboard profile.
+ * @param {{ characterHealth?: unknown, stats?: { characterHealth?: unknown }, character_health?: unknown }|null|undefined} profile
+ * @returns {number}
+ */
+export function healthFromFriendLike(profile) {
+  const fromProfile = clampHealthValue(profile?.characterHealth);
+  if (fromProfile != null) return fromProfile;
+  const fromStats = clampHealthValue(profile?.stats?.characterHealth);
+  if (fromStats != null) return fromStats;
+  const fromSnake = clampHealthValue(profile?.character_health);
+  if (fromSnake != null) return fromSnake;
+  return SESSION_START_HEALTH;
+}
+
+/**
+ * Image path for a friend/leaderboard avatar (chosen buddy + current stage).
+ * @param {{ characterId?: string, characterHealth?: unknown, stats?: { characterHealth?: unknown } }|null|undefined} profile
+ * @returns {string}
+ */
+export function buddySrcForProfile(profile) {
+  return buddyVisualForHealth(profile?.characterId, healthFromFriendLike(profile)).src;
+}

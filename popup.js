@@ -1,5 +1,6 @@
 import { bootCloudSync, formatSessionClock } from "./web/session-sync.js";
 import { isCloudConfigured, listenAuth, loadFriendsActivity } from "./web/cloud.js";
+import { buddySrcForProfile } from "./web/profile/characterHealthVisual.js";
 
 const LOG_POLL_MS = 10_000;
 const DEFAULT_SECONDS = 25 * 60;
@@ -591,7 +592,6 @@ async function refreshPopupActivity() {
       }
       popupActivity.innerHTML = `<ol class="popup-activity-list" aria-label="Friend activity">${friends
         .map((friend) => {
-          const avatar = friend.characterId === "cat" ? "cat.png" : "moon1.png";
           const stats = friend.shareStats && friend.stats
             ? `${friend.stats.todayFocusPercent ?? 0}% today · ${friend.stats.streakDays ?? 0} day streak`
             : "Stats hidden";
@@ -605,7 +605,7 @@ async function refreshPopupActivity() {
             ? `<p class="popup-activity-meta">${friend.customStatus}</p>`
             : "";
           return `<li class="popup-activity-row">
-            <img class="popup-activity-avatar" src="${avatar}" alt="" />
+            <img class="popup-activity-avatar" src="${buddySrcForProfile(friend).replace(/^\//, "")}" alt="" />
             <div class="popup-activity-main">
               <p class="popup-activity-name">${friend.username}</p>
               ${status}

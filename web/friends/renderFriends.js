@@ -3,13 +3,7 @@
 /** @typedef {import('./friendTypes.js').LeaderboardView} LeaderboardView */
 /** @typedef {import('./friendsService.js').FriendshipWithProfiles} FriendshipWithProfiles */
 
-/**
- * @param {string} [characterId]
- * @returns {string}
- */
-function avatarSrc(characterId) {
-  return characterId === "cat" ? "/cat.png" : "/moon1.png";
-}
+import { buddySrcForProfile } from "../profile/characterHealthVisual.js";
 
 /**
  * @param {number} rank
@@ -199,7 +193,7 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
             return `
               <li class="friends-row ${rankClass(entry.rank)} ${you ? "is-you" : ""}">
                 <span class="friends-rank">#${entry.rank}</span>
-                <img class="friends-avatar" src="${avatarSrc(p.characterId)}" alt="" />
+                <img class="friends-avatar" src="${buddySrcForProfile(p)}" alt="" />
                 <div class="friends-row-main">
                   <p class="friends-username">
                     ${escapeHtml(p.username)}${you ? " <span class='friends-you-tag'>(you)</span>" : ""}
