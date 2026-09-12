@@ -4,7 +4,7 @@
  * @property {string} username
  * @property {number} focusLevel
  * @property {number} xp
- * @property {number} focusStreak - consecutive focus days (Focus Streak)
+ * @property {number} focusStreak - Focus Flame value (from profiles.focus_flame)
  * @property {string} [characterId] - optional buddy icon: "cat" | "sleepbunny"
  * @property {boolean} [isCurrentUser]
  * @property {boolean} [isMock] - true for demo friends (easy to strip later)

@@ -1,16 +1,27 @@
 import { loadProfileStore } from "./profile/profileStorage.js";
 import { calculateProfileStats } from "./profile/calculateStats.js";
 import { renderProfileStats } from "./profile/renderProfileStats.js";
-import { MOCK_FRIENDS } from "./friends/mockFriends.js";
 import {
   buildLeaderboardView,
   currentUserAsFriend,
 } from "./friends/calculateLeaderboard.js";
 import { renderFriendsLeaderboard } from "./friends/renderFriends.js";
 import {
-  getCurrentProfile,
-  getSession,
+  acceptFriendRequest,
+  getAcceptedFriends,
+  getActiveFriendshipWith,
+  getIncomingPendingRequests,
+  profileToFriendProfile,
+  rejectFriendRequest,
+  searchUserByUsername,
+  sendFriendRequest,
+} from "./friends/friendsService.js";
+import {
+  ensureProfileForUser,
+  getCachedProfile,
+  loadCurrentProfile,
   onAuthStateChange,
+  setCachedProfile,
   signOut,
 } from "./auth/authService.js";
 import { mountAuthPage } from "./auth/renderAuth.js";
@@ -42,20 +53,38 @@ const sitesStatus = document.getElementById("sites-status");
 let signedInProfile = null;
 let dashboardInitialized = false;
 
+/**
+ * @returns {import('./auth/authService.js').ProfileRow|null}
+ */
+function getSignedInProfile() {
+  return signedInProfile || getCachedProfile();
+}
+
 const STORAGE_KEY = "focusBuddy.selectedCharacter";
 const BLOCK_SITES_KEY = "focusBuddy.blockSites";
 const ALLOW_SITES_KEY = "focusBuddy.alwaysAllowSites";
 const LEGACY_SITES_KEY = "focusBuddy.allowedSites";
 const TASK_KEY = "focusBuddy.task";
-const DEMO_FRIENDS_KEY = "focusBuddy.demoFriends";
 
 let selectedCharacterId = "sleepbunny";
 /** @type {'level' | 'streak'} */
 let leaderboardMode = "level";
-/** @type {import('./friends/friendTypes.js').FriendProfile[]} */
-let demoExtraFriends = [];
 let blockSites = [];
 let allowSites = [];
+
+/** @type {import('./friends/friendsService.js').FriendshipWithProfiles[]} */
+let incomingFriendRequests = [];
+/** @type {Array<{ friendship: import('./friends/friendsService.js').FriendshipRow, friend: import('./auth/authService.js').ProfileRow }>} */
+let acceptedFriends = [];
+let friendsAddInput = "";
+/** @type {{ kind: 'idle' | 'error' | 'success' | 'loading', message: string }} */
+let friendsAddStatus = { kind: "idle", message: "" };
+let friendsAddBusy = false;
+/** @type {string|null} */
+let friendsRequestActionId = null;
+let friendsRequestsError = "";
+let friendsLeaderboardLoading = false;
+let friendsLeaderboardError = "";
 
 function applyCharacter(id) {
   const character = CHARACTERS[id];
@@ -87,28 +116,11 @@ function applyCharacter(id) {
   if (dashboardInitialized) refreshProfileStats();
 }
 
-function loadDemoExtras() {
-  try {
-    const raw = localStorage.getItem(DEMO_FRIENDS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    demoExtraFriends = Array.isArray(parsed) ? parsed : [];
-  } catch {
-    demoExtraFriends = [];
-  }
-}
-
-function saveDemoExtras() {
-  try {
-    localStorage.setItem(DEMO_FRIENDS_KEY, JSON.stringify(demoExtraFriends));
-  } catch {
-    // Ignore.
-  }
-}
-
 function refreshProfileStats() {
   const store = loadProfileStore();
   const stats = calculateProfileStats(store);
-  const username = signedInProfile?.username || "You";
+  const profile = getSignedInProfile();
+  const username = profile?.username || "You";
   renderProfileStats(profileRoot, stats, {
     characterId: selectedCharacterId,
     username,
@@ -133,59 +145,205 @@ function refreshFriendsLeaderboard(stats) {
   if (!friendsRoot) return;
 
   const profileStats = stats || calculateProfileStats(loadProfileStore());
-  const you = currentUserAsFriend({
-    level: signedInProfile?.focus_level ?? profileStats.level,
-    xp: signedInProfile?.xp ?? profileStats.xp,
-    focusStreakDays: signedInProfile?.focus_flame ?? profileStats.focusStreakDays,
-    characterId: selectedCharacterId,
-    username: signedInProfile?.username ?? "You",
-  });
+  const profile = getSignedInProfile();
+  const you = profile
+    ? profileToFriendProfile(profile, {
+        isCurrentUser: true,
+        characterId: selectedCharacterId,
+      })
+    : currentUserAsFriend({
+        level: profileStats.level,
+        xp: profileStats.xp,
+        focusStreakDays: profileStats.focusStreakDays,
+        characterId: selectedCharacterId,
+        username: "You",
+      });
 
-  const group = [you, ...MOCK_FRIENDS, ...demoExtraFriends];
+  const friendProfiles = acceptedFriends.map(({ friend }) =>
+    profileToFriendProfile(friend)
+  );
+  const group = [you, ...friendProfiles];
   const view = buildLeaderboardView(group, you.id, leaderboardMode);
 
   renderFriendsLeaderboard(friendsRoot, view, {
-    username: signedInProfile?.username || "You",
+    username: profile?.username || "You",
+    addInputValue: friendsAddInput,
+    addBusy: friendsAddBusy,
+    addStatus: friendsAddStatus,
+    incomingRequests: incomingFriendRequests,
+    requestActionId: friendsRequestActionId,
+    requestsError: friendsRequestsError,
+    leaderboardLoading: friendsLeaderboardLoading,
+    leaderboardError: friendsLeaderboardError,
     onModeChange: (mode) => {
       leaderboardMode = mode;
       refreshFriendsLeaderboard(profileStats);
     },
     onAddFriend: (username) => {
-      if (!username) {
-        refreshFriendsLeaderboard(profileStats);
-        const note = friendsRoot.querySelector(".friends-demo-note");
-        if (note) note.textContent = "Enter a username to add a demo friend.";
-        return;
-      }
-
-      const exists = [...MOCK_FRIENDS, ...demoExtraFriends].some(
-        (f) => f.username.toLowerCase() === username.toLowerCase()
-      );
-      if (exists) {
-        const note = friendsRoot.querySelector(".friends-demo-note");
-        if (note) note.textContent = "That demo friend is already on your list.";
-        return;
-      }
-
-      demoExtraFriends.push({
-        id: `demo-${Date.now()}`,
-        username,
-        focusLevel: 1 + Math.floor(Math.random() * 4),
-        xp: 40 + Math.floor(Math.random() * 200),
-        focusStreak: Math.floor(Math.random() * 6),
-        characterId: Math.random() > 0.5 ? "cat" : "sleepbunny",
-        isMock: true,
-      });
-      saveDemoExtras();
-      refreshFriendsLeaderboard(profileStats);
-
-      const note = friendsRoot.querySelector(".friends-demo-note");
-      if (note) {
-        note.textContent =
-          "Added as a local demo friend only — this does not connect to a real account.";
-      }
+      void handleAddFriend(username);
+    },
+    onAcceptRequest: (friendshipId) => {
+      void handleAcceptRequest(friendshipId);
+    },
+    onDeclineRequest: (friendshipId) => {
+      void handleDeclineRequest(friendshipId);
     },
   });
+}
+
+/**
+ * @param {string} username
+ */
+async function handleAddFriend(username) {
+  friendsAddInput = username;
+  if (!username.trim()) {
+    friendsAddStatus = { kind: "error", message: "Enter a username." };
+    refreshFriendsLeaderboard();
+    return;
+  }
+
+  friendsAddBusy = true;
+  friendsAddStatus = { kind: "loading", message: "Looking up user…" };
+  refreshFriendsLeaderboard();
+
+  try {
+    const me = getSignedInProfile();
+    if (!me?.id) throw new Error("You must be signed in.");
+
+    let target;
+    try {
+      target = await searchUserByUsername(username);
+    } catch (err) {
+      const msg = err?.message || "";
+      if (/username/i.test(msg)) {
+        friendsAddStatus = { kind: "error", message: "User not found" };
+        return;
+      }
+      throw err;
+    }
+
+    if (!target) {
+      friendsAddStatus = { kind: "error", message: "User not found" };
+      return;
+    }
+
+    if (target.id === me.id) {
+      friendsAddStatus = { kind: "error", message: "You can't add yourself" };
+      return;
+    }
+
+    const existing = await getActiveFriendshipWith(target.id);
+    if (existing?.status === "accepted") {
+      friendsAddStatus = { kind: "error", message: "You're already friends" };
+      return;
+    }
+    if (existing?.status === "pending") {
+      if (existing.requester_id === me.id) {
+        friendsAddStatus = {
+          kind: "error",
+          message: "Friend request already pending",
+        };
+      } else {
+        friendsAddStatus = {
+          kind: "error",
+          message: "Friend request already pending — check Friend Requests",
+        };
+      }
+      return;
+    }
+
+    await sendFriendRequest(target.id);
+    friendsAddInput = "";
+    friendsAddStatus = {
+      kind: "success",
+      message: `Friend request sent to @${target.username}`,
+    };
+  } catch (err) {
+    friendsAddStatus = {
+      kind: "error",
+      message: err?.message || "Could not send friend request.",
+    };
+  } finally {
+    friendsAddBusy = false;
+    refreshFriendsLeaderboard();
+  }
+}
+
+/**
+ * @param {string} friendshipId
+ */
+async function handleAcceptRequest(friendshipId) {
+  if (friendsRequestActionId) return;
+  friendsRequestActionId = friendshipId;
+  friendsRequestsError = "";
+  refreshFriendsLeaderboard();
+
+  try {
+    await acceptFriendRequest(friendshipId);
+    incomingFriendRequests = incomingFriendRequests.filter((r) => r.id !== friendshipId);
+    acceptedFriends = await getAcceptedFriends();
+  } catch (err) {
+    friendsRequestsError = err?.message || "Could not accept request.";
+  } finally {
+    friendsRequestActionId = null;
+    refreshFriendsLeaderboard();
+  }
+}
+
+/**
+ * @param {string} friendshipId
+ */
+async function handleDeclineRequest(friendshipId) {
+  if (friendsRequestActionId) return;
+  friendsRequestActionId = friendshipId;
+  friendsRequestsError = "";
+  refreshFriendsLeaderboard();
+
+  try {
+    await rejectFriendRequest(friendshipId);
+    incomingFriendRequests = incomingFriendRequests.filter((r) => r.id !== friendshipId);
+  } catch (err) {
+    friendsRequestsError = err?.message || "Could not decline request.";
+  } finally {
+    friendsRequestActionId = null;
+    refreshFriendsLeaderboard();
+  }
+}
+
+async function loadFriendsData() {
+  friendsRequestsError = "";
+  friendsLeaderboardError = "";
+  friendsLeaderboardLoading = true;
+  refreshFriendsLeaderboard();
+
+  try {
+    const [incoming, accepted] = await Promise.all([
+      getIncomingPendingRequests(),
+      getAcceptedFriends(),
+    ]);
+    incomingFriendRequests = incoming;
+    acceptedFriends = accepted;
+  } catch (err) {
+    const message = err?.message || "Could not load friends.";
+    friendsRequestsError = message;
+    friendsLeaderboardError = message;
+    console.error("[Focus Buddy] Friends load failed:", err);
+  } finally {
+    friendsLeaderboardLoading = false;
+    refreshFriendsLeaderboard();
+  }
+}
+
+function resetFriendsUiState() {
+  incomingFriendRequests = [];
+  acceptedFriends = [];
+  friendsAddInput = "";
+  friendsAddStatus = { kind: "idle", message: "" };
+  friendsAddBusy = false;
+  friendsRequestActionId = null;
+  friendsRequestsError = "";
+  friendsLeaderboardLoading = false;
+  friendsLeaderboardError = "";
 }
 
 function loadTask() {
@@ -361,12 +519,13 @@ function initDashboardOnce() {
 
   loadTask();
   loadSites();
-  loadDemoExtras();
   refreshProfileStats();
 }
 
 function showAuthScreen() {
   signedInProfile = null;
+  setCachedProfile(null);
+  resetFriendsUiState();
   document.body.classList.remove("is-booting", "is-dashboard");
   document.body.classList.add("is-auth-screen");
   if (authPage) authPage.hidden = false;
@@ -386,6 +545,7 @@ function showAuthScreen() {
  */
 function showDashboard(profile) {
   signedInProfile = profile;
+  setCachedProfile(profile);
   document.body.classList.remove("is-booting", "is-auth-screen");
   document.body.classList.add("is-dashboard");
   if (authPage) authPage.hidden = true;
@@ -393,17 +553,12 @@ function showDashboard(profile) {
 
   initDashboardOnce();
   refreshProfileStats();
-}
-
-async function resolveProfileFromSession() {
-  const session = await getSession();
-  if (!session?.user) return null;
-  return getCurrentProfile();
+  void loadFriendsData();
 }
 
 async function bootApp() {
   try {
-    const profile = await resolveProfileFromSession();
+    const profile = await loadCurrentProfile();
     if (profile) showDashboard(profile);
     else showAuthScreen();
   } catch (err) {
@@ -412,15 +567,16 @@ async function bootApp() {
   }
 
   onAuthStateChange(async (session) => {
-    if (!session) {
+    if (!session?.user) {
       showAuthScreen();
       return;
     }
     try {
-      const profile = await getCurrentProfile();
-      if (profile) showDashboard(profile);
-      else showAuthScreen();
-    } catch {
+      // Use session.user directly — do not call getSession() inside this callback.
+      const profile = await ensureProfileForUser(session.user);
+      showDashboard(profile);
+    } catch (err) {
+      console.error("[Focus Buddy] Profile ensure failed:", err);
       showAuthScreen();
     }
   });

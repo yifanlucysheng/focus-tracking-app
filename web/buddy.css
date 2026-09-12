@@ -1059,6 +1059,7 @@ body.is-booting #app-dashboard {
 }
 
 .friends-add-card,
+.friends-requests-card,
 .friends-summary-card {
   background: #e4e7f9;
   border: 1px solid rgba(100, 108, 166, 0.22);
@@ -1087,11 +1088,86 @@ body.is-booting #app-dashboard {
   min-width: 0;
 }
 
-.friends-demo-note {
+.friends-add-status {
   margin: 12px 0 0;
   color: var(--buddy);
   font-size: 15px;
   line-height: 1.4;
+  min-height: 1.2em;
+}
+
+.friends-add-status.is-error {
+  color: #9b3b3b;
+}
+
+.friends-add-status.is-success {
+  color: #2f6b45;
+}
+
+.friends-add-status.is-loading {
+  color: var(--buddy);
+}
+
+.friends-requests-card {
+  margin-top: 0;
+}
+
+.friends-requests-empty {
+  margin: 8px 0 0;
+  color: var(--buddy);
+  font-size: 15px;
+}
+
+.friends-requests-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.friends-request-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(100, 108, 166, 0.16);
+}
+
+.friends-request-username {
+  margin: 0;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 22px;
+  color: var(--focus);
+}
+
+.friends-request-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.friends-request-actions .btn-secondary {
+  color: #fff;
+  background: #646ca6;
+}
+
+.friends-request-actions .btn-secondary:hover:not(:disabled) {
+  background: #555d96;
+}
+
+.friends-decline-btn {
+  background: transparent;
+  color: var(--buddy);
+  border: 1px solid rgba(100, 108, 166, 0.35);
+}
+
+.friends-decline-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .friends-summary-grid {
@@ -1106,6 +1182,27 @@ body.is-booting #app-dashboard {
   font-size: clamp(22px, 3vw, 30px);
   color: var(--focus);
   line-height: 1.2;
+}
+
+.friends-summary-value.is-muted {
+  font-size: clamp(18px, 2.4vw, 22px);
+  color: var(--buddy);
+}
+
+.friends-leaderboard-status,
+.friends-leaderboard-empty {
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: rgba(228, 231, 249, 0.55);
+  color: var(--buddy);
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.friends-leaderboard-status.is-error {
+  color: #9b3b3b;
+  background: rgba(155, 59, 59, 0.08);
 }
 
 .friends-compare-msg {
@@ -1260,6 +1357,15 @@ body.is-booting #app-dashboard {
 @media (max-width: 640px) {
   .friends-add-row {
     flex-wrap: wrap;
+  }
+
+  .friends-request-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .friends-request-actions .btn {
+    flex: 1;
   }
 
   .friends-mode-toggle {

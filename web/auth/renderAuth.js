@@ -1,5 +1,5 @@
 import {
-  getCurrentProfile,
+  loadCurrentProfile,
   signIn,
   signOut,
   signUp,
@@ -207,12 +207,12 @@ export function mountAccountBar(root, options = {}) {
 }
 
 /**
- * Optional: load profile for an already-authenticated session.
+ * Load (and ensure) the profile for an already-authenticated session.
  * Thin wrapper so UI never talks to Supabase tables directly.
  * @returns {Promise<ProfileRow|null>}
  */
 export async function loadSignedInProfile() {
-  return getCurrentProfile();
+  return loadCurrentProfile();
 }
 
 /**

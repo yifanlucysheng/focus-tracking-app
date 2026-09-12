@@ -10,6 +10,26 @@ import { getSupabaseConfigStatus, supabase } from "./supabaseClient.js";
  * @property {string} created_at
  */
 
+const PROFILE_COLUMNS = "id, username, focus_level, xp, focus_flame, created_at";
+
+/** @type {ProfileRow|null} */
+let cachedProfile = null;
+
+/**
+ * In-memory profile for the signed-in user. Prefer this after boot / sign-in.
+ * @returns {ProfileRow|null}
+ */
+export function getCachedProfile() {
+  return cachedProfile;
+}
+
+/**
+ * @param {ProfileRow|null} profile
+ */
+export function setCachedProfile(profile) {
+  cachedProfile = profile;
+}
+
 /**
  * @param {string} username
  * @returns {string}
@@ -45,17 +65,20 @@ export async function getSession() {
 }
 
 /**
+ * Fetch the profiles row for a user id (no create).
+ * Safe to call from auth listeners — does not call getSession().
+ *
+ * @param {string} userId
  * @returns {Promise<ProfileRow|null>}
  */
-export async function getCurrentProfile() {
+export async function getProfileByUserId(userId) {
   assertConfigured();
-  const session = await getSession();
-  if (!session?.user) return null;
+  if (!userId) return null;
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, username, focus_level, xp, focus_flame, created_at")
-    .eq("id", session.user.id)
+    .select(PROFILE_COLUMNS)
+    .eq("id", userId)
     .maybeSingle();
 
   if (error) throw error;
@@ -63,9 +86,73 @@ export async function getCurrentProfile() {
 }
 
 /**
+ * Read the signed-in user's profile (no create). Returns null if signed out or missing.
+ * @returns {Promise<ProfileRow|null>}
+ */
+export async function getCurrentProfile() {
+  assertConfigured();
+  const session = await getSession();
+  if (!session?.user) {
+    cachedProfile = null;
+    return null;
+  }
+
+  const profile = await getProfileByUserId(session.user.id);
+  cachedProfile = profile;
+  return profile;
+}
+
+/**
+ * Ensure a profiles row exists for this auth user, cache it, and return it.
+ * Use after sign-in / session restore. Prefer this over getCurrentProfile when
+ * the app needs a guaranteed profile.
+ *
+ * Safe to call with a User from onAuthStateChange (does not call getSession).
+ *
+ * @param {import('@supabase/supabase-js').User} user
+ * @returns {Promise<ProfileRow>}
+ */
+export async function ensureProfileForUser(user) {
+  assertConfigured();
+  if (!user?.id) throw new Error("Missing auth user.");
+
+  const existing = await getProfileByUserId(user.id);
+  if (existing) {
+    cachedProfile = existing;
+    return existing;
+  }
+
+  const username = normalizeUsername(user.user_metadata?.username || "");
+  const usernameError = validateUsername(username);
+  if (usernameError) {
+    throw new Error(
+      "Account has no username yet. Sign up again with a username, or contact support."
+    );
+  }
+
+  const profile = await createProfileRow(user.id, username);
+  cachedProfile = profile;
+  return profile;
+}
+
+/**
+ * Load session → ensure profiles row → cache. Returns null if signed out.
+ * @returns {Promise<ProfileRow|null>}
+ */
+export async function loadCurrentProfile() {
+  assertConfigured();
+  const session = await getSession();
+  if (!session?.user) {
+    cachedProfile = null;
+    return null;
+  }
+  return ensureProfileForUser(session.user);
+}
+
+/**
  * Sign up with email/password, then create a profiles row when a session exists.
  * If email confirmation is required, username is stored in user metadata and
- * the profile is created on the first successful sign-in.
+ * the profile is created on the first successful sign-in (or by the DB trigger).
  *
  * @param {{ email: string, password: string, username: string }} input
  * @returns {Promise<{ user: import('@supabase/supabase-js').User|null, session: import('@supabase/supabase-js').Session|null, profile: ProfileRow|null, needsEmailConfirmation: boolean }>}
@@ -97,7 +184,7 @@ export async function signUp({ email, password, username }) {
 
   let profile = null;
   if (data.session?.user) {
-    profile = await createProfileRow(data.session.user.id, normalized);
+    profile = await ensureProfileForUser(data.session.user);
   }
 
   return {
@@ -135,17 +222,22 @@ export async function signIn({ email, password }) {
  */
 export async function signOut() {
   assertConfigured();
+  cachedProfile = null;
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
 
 /**
  * Subscribe to auth state changes.
+ * Callback receives the session only — resolve the profile with
+ * ensureProfileForUser(session.user) (do not call getSession inside the callback).
+ *
  * @param {(session: import('@supabase/supabase-js').Session|null) => void} callback
  * @returns {() => void} unsubscribe
  */
 export function onAuthStateChange(callback) {
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session) cachedProfile = null;
     callback(session);
   });
   return () => data.subscription.unsubscribe();
@@ -181,11 +273,14 @@ async function createProfileRow(userId, username) {
       xp: 0,
       focus_flame: 0,
     })
-    .select("id, username, focus_level, xp, focus_flame, created_at")
+    .select(PROFILE_COLUMNS)
     .single();
 
   if (error) {
+    // Concurrent insert (client + DB trigger) or username race — re-fetch by id.
     if (error.code === "23505") {
+      const existing = await getProfileByUserId(userId);
+      if (existing) return existing;
       throw new Error("That username is already taken.");
     }
     throw error;
@@ -194,33 +289,8 @@ async function createProfileRow(userId, username) {
   return data;
 }
 
-/**
- * Create a profile if missing (e.g. after email confirmation).
- * @param {import('@supabase/supabase-js').User} user
- * @returns {Promise<ProfileRow>}
- */
-async function ensureProfileForUser(user) {
-  const { data: existing, error: readError } = await supabase
-    .from("profiles")
-    .select("id, username, focus_level, xp, focus_flame, created_at")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (readError) throw readError;
-  if (existing) return existing;
-
-  const username = normalizeUsername(user.user_metadata?.username || "");
-  const usernameError = validateUsername(username);
-  if (usernameError) {
-    throw new Error(
-      "Account has no username yet. Sign up again with a username, or contact support."
-    );
-  }
-
-  return createProfileRow(user.id, username);
-}
-
 function assertConfigured() {
   const status = getSupabaseConfigStatus();
-  if (!status.ok) throw new Error(status.message);
+  if (status.ok) return;
+  throw new Error(status.message);
 }

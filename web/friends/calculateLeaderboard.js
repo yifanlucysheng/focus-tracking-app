@@ -11,15 +11,15 @@
  */
 function compareProfiles(a, b, mode) {
   if (mode === "streak") {
+    // Focus Flame mode — sort by focus_flame (stored as focusStreak on FriendProfile)
     if (b.focusStreak !== a.focusStreak) return b.focusStreak - a.focusStreak;
-    if (b.focusLevel !== a.focusLevel) return b.focusLevel - a.focusLevel;
-    return b.xp - a.xp;
+    return String(a.username).localeCompare(String(b.username));
   }
 
-  // Focus Level mode
+  // Focus Level mode: level desc, xp tie-breaker
   if (b.focusLevel !== a.focusLevel) return b.focusLevel - a.focusLevel;
   if (b.xp !== a.xp) return b.xp - a.xp;
-  return b.focusStreak - a.focusStreak;
+  return String(a.username).localeCompare(String(b.username));
 }
 
 /**
@@ -65,11 +65,11 @@ export function findTopFriend(entries, userId) {
  */
 export function generateComparisonMessage(entries, userId, mode) {
   const you = entries.find((entry) => entry.profile.id === userId);
-  if (!you) return "Add some friends to see how you compare.";
+  if (!you) return "Add some friends to start your leaderboard!";
 
   const friendsOnly = entries.filter((entry) => entry.profile.id !== userId);
   if (friendsOnly.length === 0) {
-    return "Invite friends to start comparing focus progress.";
+    return "Add some friends to start your leaderboard!";
   }
 
   const yourRank = you.rank;
@@ -80,24 +80,20 @@ export function generateComparisonMessage(entries, userId, mode) {
       (entry) => entry.profile.focusStreak > you.profile.focusStreak
     );
     if (ahead.length === 0) {
-      return "You have the hottest Focus Streak in your group.";
+      return "You have the hottest Focus Flame in your group.";
     }
 
     const leader = ahead[0].profile;
     const gap = leader.focusStreak - you.profile.focusStreak;
     if (gap === 1) {
-      return `You're 1 day behind ${leader.username}'s Focus Streak.`;
+      return `You're 1 day behind ${leader.username}'s Focus Flame.`;
     }
-    return `You're ${gap} days behind ${leader.username}'s Focus Streak.`;
+    return `You're ${gap} days behind ${leader.username}'s Focus Flame.`;
   }
 
   // Level mode
   if (yourRank === 1) {
     return "You have the highest Focus Level in your group.";
-  }
-
-  if (yourRank === 2) {
-    return "You have the 2nd highest Focus Level in your group.";
   }
 
   const lowerCount = friendsOnly.filter(
@@ -109,7 +105,7 @@ export function generateComparisonMessage(entries, userId, mode) {
 
   const percent = Math.round((lowerCount / friendsOnly.length) * 100);
   if (percent <= 0) {
-    return `You're #${yourRank} out of ${groupSize} in Focus Level.`;
+    return `You're #${yourRank} out of ${groupSize} friends`;
   }
 
   return `Your Focus Level is higher than ${percent}% of your friends.`;
@@ -122,6 +118,18 @@ export function generateComparisonMessage(entries, userId, mode) {
  * @returns {LeaderboardView}
  */
 export function buildLeaderboardView(profiles, userId, mode) {
+  const friendsOnly = profiles.filter((p) => p.id !== userId && !p.isCurrentUser);
+  if (friendsOnly.length === 0) {
+    return {
+      mode,
+      entries: [],
+      yourRank: 0,
+      totalFriends: 0,
+      topFriend: null,
+      comparisonMessage: "Add some friends to start your leaderboard!",
+    };
+  }
+
   const entries = rankByMode(profiles, mode);
   const yourRank = findUserRank(entries, userId);
   const topFriend = findTopFriend(entries, userId);
@@ -137,14 +145,14 @@ export function buildLeaderboardView(profiles, userId, mode) {
 }
 
 /**
- * Build the current-user FriendProfile from Personal Stats values.
+ * Build the current-user FriendProfile from Personal Stats / Supabase profile values.
  *
- * @param {{ level: number, xp: number, focusStreakDays: number, characterId?: string, username?: string }} stats
+ * @param {{ id?: string, level: number, xp: number, focusStreakDays: number, characterId?: string, username?: string }} stats
  * @returns {FriendProfile}
  */
 export function currentUserAsFriend(stats) {
   return {
-    id: "current-user",
+    id: stats.id || "current-user",
     username: stats.username || "You",
     focusLevel: stats.level || 1,
     xp: stats.xp || 0,

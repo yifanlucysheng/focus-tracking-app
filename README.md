@@ -30,11 +30,23 @@ Never commit `.env.local`.
 
 ### 3. Create the `profiles` table
 
-In the Supabase SQL Editor, run:
+In the Supabase SQL Editor, run the full script:
 
 [`supabase/profiles.sql`](supabase/profiles.sql)
 
+That creates `profiles` (`id` = `auth.users.id`, unique `username`, `focus_level`, `xp`, `focus_flame`), RLS policies, and a trigger that inserts a profile row on signup from username metadata.
+
+If you already ran an older version of this file, re-run it so the `handle_new_user` trigger is installed.
+
 Also enable **Email** auth under **Authentication → Providers**.
+
+### 3b. Create the `friendships` table
+
+In the Supabase SQL Editor, run:
+
+[`supabase/friendships.sql`](supabase/friendships.sql)
+
+Client helpers live in [`web/friends/friendsService.js`](web/friends/friendsService.js). Add Friend, Friend Requests, and the leaderboard use real accepted friendships from Supabase.
 
 ### 4. Run the website
 
@@ -44,5 +56,4 @@ npm run dev
 
 Open the URL Vite prints (usually `http://127.0.0.1:5173`).
 
-Sign up creates an `auth.users` row and a matching `profiles` row (`id` = auth user id).
-Friendships are not implemented yet — the leaderboard still uses mock data.
+After sign-up / sign-in / page reload, the client loads (and creates if missing) the current user's `profiles` row and keeps it in memory via `getCachedProfile()` for the rest of the app.

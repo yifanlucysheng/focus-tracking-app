@@ -17,29 +17,56 @@ create unique index if not exists profiles_username_unique
 
 alter table public.profiles enable row level security;
 
--- Authenticated users can read profiles (needed later for friends-by-username).
+drop policy if exists "Authenticated users can read profiles" on public.profiles;
 create policy "Authenticated users can read profiles"
   on public.profiles
   for select
   to authenticated
   using (true);
 
--- Allow username availability checks during sign-up (before a session exists).
+drop policy if exists "Anyone can check usernames" on public.profiles;
 create policy "Anyone can check usernames"
   on public.profiles
   for select
   to anon
   using (true);
 
+drop policy if exists "Users can insert their own profile" on public.profiles;
 create policy "Users can insert their own profile"
   on public.profiles
   for insert
   to authenticated
   with check (auth.uid() = id);
 
+drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Users can update their own profile"
   on public.profiles
   for update
   to authenticated
   using (auth.uid() = id)
   with check (auth.uid() = id);
+
+-- Auto-create a profiles row when a new auth user is created (username from signup metadata).
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uname text;
+begin
+  uname := lower(trim(coalesce(new.raw_user_meta_data->>'username', '')));
+  if uname ~ '^[a-z0-9_]{3,24}$' then
+    insert into public.profiles (id, username, focus_level, xp, focus_flame)
+    values (new.id, uname, 1, 0, 0)
+    on conflict (id) do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
