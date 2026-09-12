@@ -14,6 +14,9 @@ const summarySection = document.getElementById("summary-section");
 const summaryText = document.getElementById("summary-text");
 const taskTextInput = document.getElementById("task-text");
 const changeTaskBtn = document.getElementById("change-task-btn");
+const geminiKeyInput = document.getElementById("gemini-api-key");
+const saveGeminiKeyBtn = document.getElementById("save-gemini-key");
+const geminiKeyStatus = document.getElementById("gemini-key-status");
 
 let snapshot = null;
 let displayId = null;
@@ -234,7 +237,7 @@ function toggleLockIn() {
   activateLockIn();
 }
 
-chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText"]).then((result) => {
+chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText", "geminiApiKey"]).then((result) => {
   applyStoredMood(result.characterMood);
   setLockInUi(result.lockInActive);
   if (typeof result.taskText === "string" && taskTextInput) {
@@ -242,6 +245,9 @@ chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "task
   }
   if (timerDropdown) {
     timerDropdown.open = Boolean(result[TIMER_OPEN_KEY]);
+  }
+  if (geminiKeyInput && result.geminiApiKey) {
+    geminiKeyInput.value = result.geminiApiKey;
   }
 });
 
@@ -260,6 +266,14 @@ timerDropdown?.addEventListener("toggle", () => {
 });
 
 lockInBtn?.addEventListener("click", toggleLockIn);
+saveGeminiKeyBtn?.addEventListener("click", () => {
+  const apiKey = geminiKeyInput?.value?.trim() ?? "";
+  chrome.storage.local.set({ geminiApiKey: apiKey }, () => {
+    if (!geminiKeyStatus) return;
+    geminiKeyStatus.hidden = false;
+    geminiKeyStatus.textContent = apiKey ? "Key saved on this device." : "Key cleared. Matching will use keywords only.";
+  });
+});
 changeTaskBtn?.addEventListener("click", (event) => {
   event.preventDefault();
   if (taskEditing) {

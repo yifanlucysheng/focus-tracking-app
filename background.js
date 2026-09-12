@@ -6,11 +6,15 @@ const TASK_TEXT_KEY = "taskText";
 const TIMER_KEY = "timerState";
 const TIMER_ALARM = "focus-timer-end";
 const DEFAULT_SECONDS = 25 * 60;
+const GEMINI_KEY = "geminiApiKey";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const DISTRACTED_DELAY_MS = 10_000;
 
 let taskKeywords = [];
 let lockInActive = false;
 let distractedTimerId = null;
+let geminiCache = new Map();
+let geminiInflight = new Map();
 
 function defaultTimerState() {
   return {
@@ -197,33 +201,121 @@ async function applyTabStatus(status) {
   }, DISTRACTED_DELAY_MS);
 }
 
-async function scanTabText(tab) {
-  const parts = [tab.url || "", tab.title || ""];
+async function scanTabDetails(tab) {
+  const url = tab.url || "";
+  const title = tab.title || "";
+  let excerpt = "";
   if (tab.id != null) {
     try {
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: () => document.body?.innerText?.slice(0, 50_000) ?? "",
+        func: () => document.body?.innerText?.slice(0, 1_500) ?? "",
       });
-      parts.push(results?.[0]?.result ?? "");
+      excerpt = results?.[0]?.result ?? "";
     } catch {
       // Restricted pages (chrome://, Web Store, etc.) cannot be scanned.
     }
   }
-  return parts.join(" ").toLowerCase();
+  const haystack = `${url} ${title} ${excerpt}`.toLowerCase();
+  return { url, title, excerpt, haystack };
 }
 
-function classifyText(haystack) {
-  if (taskKeywords.length === 0) return "distracted";
-  const onTask = taskKeywords.some((keyword) => haystack.includes(keyword));
-  return onTask ? "on-task" : "distracted";
+function classifyByKeywords(haystack) {
+  if (taskKeywords.length === 0) return null;
+  return taskKeywords.some((keyword) => haystack.includes(keyword))
+    ? "on-task"
+    : null;
+}
+
+function parseGeminiRelated(payload) {
+  try {
+    const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const parsed = JSON.parse(text);
+    if (typeof parsed.related === "boolean") {
+      return parsed.related ? "on-task" : "distracted";
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function askGeminiIfRelated(task, details) {
+  const stored = await chrome.storage.local.get(GEMINI_KEY);
+  const apiKey = String(stored[GEMINI_KEY] || "").trim();
+  if (!apiKey || !task) return null;
+
+  const cacheKey = `${task.toLowerCase()}||${details.url}`;
+  if (geminiCache.has(cacheKey)) {
+    return geminiCache.get(cacheKey);
+  }
+  if (geminiInflight.has(cacheKey)) {
+    return geminiInflight.get(cacheKey);
+  }
+
+  const request = (async () => {
+    const prompt = `Decide if this browser tab is on-task for a student.
+
+Task: ${task}
+
+Tab URL: ${details.url}
+Tab title: ${details.title}
+Page excerpt: ${details.excerpt || "(none)"}
+
+Count the tab as related if it would reasonably help with or is about the task, including closely related topics. Examples of related: task "math" and a Wikipedia article on calculus; task "math" and a YouTube video on vector addition.
+Not related: social media, shopping, games, or unrelated entertainment/news unless it clearly teaches the task.
+
+Reply with JSON only: {"related": true} or {"related": false}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+    if (!response.ok) return null;
+    const status = parseGeminiRelated(await response.json());
+    if (status) {
+      geminiCache.set(cacheKey, status);
+    }
+    return status;
+  })();
+
+  geminiInflight.set(cacheKey, request);
+  try {
+    return await request;
+  } catch {
+    return null;
+  } finally {
+    geminiInflight.delete(cacheKey);
+  }
 }
 
 async function classifyTab(tab) {
   await loadKeywords();
   if (!lockInActive || !tab) return null;
-  const haystack = await scanTabText(tab);
-  return classifyText(haystack);
+
+  const details = await scanTabDetails(tab);
+  const keywordHit = classifyByKeywords(details.haystack);
+  if (keywordHit) return keywordHit;
+
+  const storedTask = await chrome.storage.local.get(TASK_TEXT_KEY);
+  const task = String(storedTask[TASK_TEXT_KEY] || "").trim();
+  const geminiStatus = await askGeminiIfRelated(task, details);
+  if (geminiStatus) return geminiStatus;
+
+  return "distracted";
 }
 
 async function classifyActiveTab() {
@@ -246,6 +338,7 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
     [FOCUS_LOG_KEY]: [],
   });
   lockInActive = true;
+  geminiCache = new Map();
   await saveKeywords(extractKeywords(text));
   await setCharacterMood("on-task");
   clearDistractedTimer();
@@ -293,6 +386,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "UPDATE_TASK") {
     (async () => {
       const text = String(message.taskText || "").trim();
+      geminiCache = new Map();
       await chrome.storage.local.set({ [TASK_TEXT_KEY]: text });
       await saveKeywords(extractKeywords(text));
       await evaluateActiveTab();
