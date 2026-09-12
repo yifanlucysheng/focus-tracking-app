@@ -1397,6 +1397,99 @@ body:has(.intro-section) .intro-section {
   margin: 40px 0 16px;
 }
 
+.folder-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  margin: 4px 0 8px;
+}
+
+.folder-chip {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--focus);
+}
+
+.folder-open-btn,
+.folder-delete-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: "LXGW Marker Gothic", sans-serif;
+  cursor: pointer;
+}
+
+.folder-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px 10px 16px;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.folder-name {
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 22px;
+}
+
+.folder-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(100, 108, 166, 0.18);
+  color: var(--buddy);
+  font-size: 14px;
+}
+
+.folder-delete-btn {
+  padding: 0 14px 0 8px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--buddy);
+}
+
+.folder-open-btn:hover {
+  color: var(--ink);
+}
+
+.folder-delete-btn:hover {
+  color: #c44b4b;
+}
+
+.folder-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.folder-add-row .field-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.folder-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.folder-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  color: var(--focus);
+}
+
 .sites-settings {
   margin-top: 40px;
 }

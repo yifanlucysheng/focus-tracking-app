@@ -43,7 +43,17 @@ export function initFoldersPanel() {
       const openBtn = document.createElement("button");
       openBtn.type = "button";
       openBtn.className = "folder-open-btn";
-      openBtn.textContent = `${label.name} (${count})`;
+      openBtn.setAttribute("aria-label", `Open ${label.name} folder`);
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "folder-name";
+      nameEl.textContent = label.name;
+
+      const countEl = document.createElement("span");
+      countEl.className = "folder-count";
+      countEl.textContent = count === 1 ? "1 site" : `${count} sites`;
+
+      openBtn.append(nameEl, countEl);
       openBtn.addEventListener("click", () => {
         sendMessage("OPEN_LABEL", { labelId: label.id });
       });
