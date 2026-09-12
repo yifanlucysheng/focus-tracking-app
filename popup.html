@@ -5,23 +5,62 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="task-section">
-      <input type="text" id="task-text" placeholder="What are you working on?" />
-    </div>
-    <div id="timer-section">
-      <div id="timer-display">25:00</div>
-      <div class="timer-controls">
-        <button id="start-task-btn" type="button">Start Focus</button>
-        <button id="pause-timer-btn" type="button" disabled>Pause</button>
-        <button id="cancel-timer-btn" type="button" disabled>Cancel</button>
+    <section id="auth-section" class="auth-section" aria-label="FocusBuddy account">
+      <p id="auth-status" class="auth-status">Checking FocusBuddy connection…</p>
+      <form id="auth-form" class="auth-form" hidden>
+        <label class="auth-label" for="auth-email">Email</label>
+        <input id="auth-email" class="auth-input" type="email" autocomplete="username" required />
+        <label class="auth-label" for="auth-password">Password</label>
+        <input id="auth-password" class="auth-input" type="password" autocomplete="current-password" required />
+        <button id="auth-submit" class="auth-submit" type="submit">Sign in</button>
+        <p id="auth-error" class="auth-error" hidden></p>
+      </form>
+      <div id="auth-signed-in" class="auth-signed-in" hidden>
+        <p id="auth-user-line" class="auth-user-line"></p>
+        <button id="auth-signout" class="auth-signout" type="button">Sign out</button>
+      </div>
+    </section>
+
+    <details id="timer-dropdown">
+      <summary>Timer</summary>
+      <div id="timer-section">
+        <div id="timer-display">25:00</div>
+        <div class="duration-picker">
+          <label>
+            <input id="duration-hours" type="number" min="0" max="23" value="0" />
+            hr
+          </label>
+          <label>
+            <input id="duration-minutes" type="number" min="0" max="59" value="25" />
+            min
+          </label>
+          <label>
+            <input id="duration-seconds" type="number" min="0" max="59" value="0" />
+            sec
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <div id="lock-in-row">
+      <button id="lock-in-btn" type="button" aria-pressed="false" aria-label="Toggle lock-in mode">
+        <img id="character-img" class="on-task" src="sleepbunny.png" alt="on-task" />
+      </button>
+      <div class="lock-in-copy">
+        <p id="lock-in-hint">click to activate lock-in mode</p>
+        <div class="task-inline">
+          <label for="task-text">task:</label>
+          <input type="text" id="task-text" placeholder="e.g. chemistry homework" />
+          <button id="change-task-btn" type="button" hidden>change task</button>
+        </div>
       </div>
     </div>
-    <div id="character-section">
-      <img id="character-img" class="on-task" src="sleepbunny.png" alt="on-task" />
-      <div id="summary-section" hidden>
-        <p id="summary-text"></p>
-      </div>
+
+    <div id="summary-section" hidden>
+      <p id="summary-text"></p>
     </div>
+
+    <script src="popup-auth.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

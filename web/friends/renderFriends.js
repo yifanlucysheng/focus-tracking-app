@@ -187,7 +187,7 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
           role="tab"
           aria-selected="${mode === "streak"}"
         >
-          Focus Flame
+          Focus Streak
         </button>
       </div>
 
@@ -205,7 +205,7 @@ export function renderFriendsLeaderboard(root, view, handlers = {}) {
                     ${escapeHtml(p.username)}${you ? " <span class='friends-you-tag'>(you)</span>" : ""}
                   </p>
                   <p class="friends-row-meta">
-                    Level ${p.focusLevel} · Flame ${p.focusStreak} · ${p.xp} XP
+                    Level ${p.focusLevel} · Streak ${p.focusStreak} · ${p.xp} XP
                   </p>
                 </div>
               </li>

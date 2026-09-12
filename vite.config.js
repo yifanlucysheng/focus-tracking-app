@@ -15,7 +15,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: resolve(rootDir, "dist"),
+    // Website output (separate from the Chrome extension package in dist/)
+    outDir: resolve(rootDir, "dist-web"),
     emptyOutDir: true,
   },
 });

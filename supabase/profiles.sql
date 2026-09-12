@@ -6,7 +6,7 @@ create table if not exists public.profiles (
   username text not null,
   focus_level integer not null default 1,
   xp integer not null default 0,
-  focus_flame integer not null default 0,
+  focus_streak integer not null default 0,
   created_at timestamptz not null default now(),
   constraint profiles_username_length check (char_length(username) between 3 and 24),
   constraint profiles_username_format check (username ~ '^[a-z0-9_]+$')
@@ -58,7 +58,7 @@ declare
 begin
   uname := lower(trim(coalesce(new.raw_user_meta_data->>'username', '')));
   if uname ~ '^[a-z0-9_]{3,24}$' then
-    insert into public.profiles (id, username, focus_level, xp, focus_flame)
+    insert into public.profiles (id, username, focus_level, xp, focus_streak)
     values (new.id, uname, 1, 0, 0)
     on conflict (id) do nothing;
   end if;

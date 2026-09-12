@@ -791,7 +791,7 @@ body.is-booting #app-dashboard {
 }
 
 .profile-hero-card,
-.profile-flame-card,
+.profile-streak-card,
 .profile-level-card,
 .profile-stat-tile {
   border: 1px solid rgba(100, 108, 166, 0.22);
@@ -896,22 +896,22 @@ body.is-booting #app-dashboard {
   line-height: 1.4;
 }
 
-.profile-flame-card {
+.profile-streak-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-height: 150px;
 }
 
-.profile-flame-card .profile-stat-label {
+.profile-streak-card .profile-stat-label {
   margin: 0 0 8px;
 }
 
-.profile-flame-card.is-empty {
+.profile-streak-card.is-empty {
   opacity: 0.95;
 }
 
-.profile-flame-text {
+.profile-streak-text {
   margin: 0;
   font-family: "PP Mondwest", "Courier New", monospace;
   font-size: clamp(28px, 4vw, 40px);
@@ -919,7 +919,7 @@ body.is-booting #app-dashboard {
   line-height: 1.15;
 }
 
-.profile-flame-sub,
+.profile-streak-sub,
 .profile-level-sub,
 .profile-stat-hint {
   margin: 10px 0 0;

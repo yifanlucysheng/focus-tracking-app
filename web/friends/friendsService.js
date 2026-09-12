@@ -34,7 +34,7 @@ import { getSupabaseConfigStatus, supabase } from "../auth/supabaseClient.js";
  * @property {ProfileRow} addressee
  */
 
-const PROFILE_COLUMNS = "id, username, focus_level, xp, focus_flame, created_at";
+const PROFILE_COLUMNS = "id, username, focus_level, xp, focus_streak, created_at";
 const FRIENDSHIP_COLUMNS = "id, requester_id, addressee_id, status, created_at";
 
 /**
@@ -224,7 +224,7 @@ export function profileToFriendProfile(profile, options = {}) {
     username: profile.username,
     focusLevel: profile.focus_level ?? 1,
     xp: profile.xp ?? 0,
-    focusStreak: profile.focus_flame ?? 0,
+    focusStreak: profile.focus_streak ?? profile.focus_flame ?? 0,
     characterId: options.characterId || "sleepbunny",
     isCurrentUser: Boolean(options.isCurrentUser),
     isMock: false,

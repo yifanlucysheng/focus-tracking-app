@@ -6,11 +6,11 @@ import { getSupabaseConfigStatus, supabase } from "./supabaseClient.js";
  * @property {string} username
  * @property {number} focus_level
  * @property {number} xp
- * @property {number} focus_flame
+ * @property {number} focus_streak
  * @property {string} created_at
  */
 
-const PROFILE_COLUMNS = "id, username, focus_level, xp, focus_flame, created_at";
+const PROFILE_COLUMNS = "id, username, focus_level, xp, focus_streak, created_at";
 
 /** @type {ProfileRow|null} */
 let cachedProfile = null;
@@ -271,7 +271,7 @@ async function createProfileRow(userId, username) {
       username,
       focus_level: 1,
       xp: 0,
-      focus_flame: 0,
+      focus_streak: 0,
     })
     .select(PROFILE_COLUMNS)
     .single();

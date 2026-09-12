@@ -2,37 +2,35 @@
 /** @typedef {import('./profileTypes.js').ProfileStore} ProfileStore */
 /** @typedef {import('./profileTypes.js').ProfileStatsView} ProfileStatsView */
 
-/** XP earned per focused minute — easy to tune later. */
-export const XP_PER_FOCUSED_MINUTE = 1;
+import {
+  calculateFocusStreak,
+  latestCompletedFocusDate,
+} from "./focusStreak.js";
+import {
+  XP_PER_FOCUSED_MINUTE,
+  XP_SESSION_COMPLETION_BONUS,
+  applyXp,
+  calculateSessionXp,
+  deriveLevelFromXp,
+  normalizeProgressXp,
+  resolveProgressXp,
+  resolveTotalXp,
+  xpRequiredForLevel,
+  xpToNextLevel,
+} from "./xp.js";
 
-/** XP required for level n → n+1 grows gently. */
-export function xpRequiredForLevel(level) {
-  const safeLevel = Math.max(1, Math.floor(level));
-  return 100 + (safeLevel - 1) * 50;
-}
-
-/**
- * @param {number} totalXp
- * @returns {{ level: number, xpIntoLevel: number, xpForNextLevel: number, xpProgress: number }}
- */
-export function deriveLevelFromXp(totalXp) {
-  let xp = Math.max(0, Math.floor(totalXp));
-  let level = 1;
-
-  while (xp >= xpRequiredForLevel(level)) {
-    xp -= xpRequiredForLevel(level);
-    level += 1;
-    if (level > 999) break;
-  }
-
-  const xpForNextLevel = xpRequiredForLevel(level);
-  return {
-    level,
-    xpIntoLevel: xp,
-    xpForNextLevel,
-    xpProgress: xpForNextLevel === 0 ? 0 : xp / xpForNextLevel,
-  };
-}
+export {
+  XP_PER_FOCUSED_MINUTE,
+  XP_SESSION_COMPLETION_BONUS,
+  applyXp,
+  calculateSessionXp,
+  deriveLevelFromXp,
+  normalizeProgressXp,
+  resolveProgressXp,
+  resolveTotalXp,
+  xpRequiredForLevel,
+  xpToNextLevel,
+};
 
 /**
  * @param {number} ms
@@ -53,55 +51,8 @@ export function formatDurationShort(ms) {
   return `${Math.max(1, seconds)}s`;
 }
 
-/**
- * Local calendar day key YYYY-MM-DD.
- * @param {number} epochMs
- * @returns {string}
- */
-function dayKey(epochMs) {
-  const d = new Date(epochMs);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/**
- * Consecutive days ending today (or yesterday if no session today yet)
- * with ≥1 completed session.
- *
- * @param {FocusSession[]} sessions
- * @param {number} [now]
- * @returns {number}
- */
-export function calculateFocusStreakDays(sessions, now = Date.now()) {
-  const completedDays = new Set(
-    sessions
-      .filter((s) => s.completed && typeof s.endedAt === "number")
-      .map((s) => dayKey(s.endedAt))
-  );
-
-  if (completedDays.size === 0) return 0;
-
-  let cursor = new Date(now);
-  let key = dayKey(cursor.getTime());
-
-  // If nothing today, start streak from yesterday.
-  if (!completedDays.has(key)) {
-    cursor.setDate(cursor.getDate() - 1);
-    key = dayKey(cursor.getTime());
-    if (!completedDays.has(key)) return 0;
-  }
-
-  let streak = 0;
-  while (completedDays.has(key)) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-    key = dayKey(cursor.getTime());
-  }
-
-  return streak;
-}
+/** @deprecated Prefer calculateFocusStreak from focusStreak.js */
+export { calculateFocusStreak as calculateFocusStreakDays } from "./focusStreak.js";
 
 /**
  * @param {FocusSession[]} sessions
@@ -193,20 +144,24 @@ export function characterHealthLabel(health) {
 }
 
 /**
- * Prefer stored XP; if zero, derive a baseline from completed focused minutes.
+ * Resolve stored level + progress XP (migrates legacy lifetime when needed).
  *
  * @param {ProfileStore} store
- * @returns {number}
+ * @returns {{ level: number, xp: number, xpForNextLevel: number, xpProgress: number }}
  */
-export function resolveTotalXp(store) {
-  if (store.xp > 0) return store.xp;
-
-  const focusedMs = store.sessions
-    .filter((s) => s.completed)
-    .reduce((sum, s) => sum + (s.durationMs || 0), 0);
-
-  const focusedMinutes = Math.floor(focusedMs / 60000);
-  return focusedMinutes * XP_PER_FOCUSED_MINUTE;
+export function resolveLevelProgress(store) {
+  const normalized = normalizeProgressXp(store.level, store.xp, {
+    xpModel: store.xpModel,
+  });
+  return {
+    level: normalized.level,
+    xp: normalized.xp,
+    xpForNextLevel: normalized.xpForNextLevel,
+    xpProgress:
+      normalized.xpForNextLevel === 0
+        ? 0
+        : normalized.xp / normalized.xpForNextLevel,
+  };
 }
 
 /**
@@ -221,22 +176,24 @@ export function calculateProfileStats(store, now = Date.now()) {
 
   const health = calculateCharacterHealth(sessions);
   const longestSessionMs = calculateLongestSessionMs(sessions);
-  const totalXp = resolveTotalXp(store);
-  const levelInfo = deriveLevelFromXp(totalXp);
+  const levelInfo = resolveLevelProgress(store);
+  const focusStreak = calculateFocusStreak(sessions, now);
+  const lastDay = latestCompletedFocusDate(sessions);
 
   return {
     hasSessions,
     characterHealth: health,
     characterHealthLabel: characterHealthLabel(health),
-    focusStreakDays: calculateFocusStreakDays(sessions, now),
+    focusStreakDays: focusStreak,
+    lastCompletedFocusDate: lastDay,
     longestSessionMs,
     longestSessionLabel: formatDurationShort(longestSessionMs),
     sessionsCompleted: completed.length,
     topDistraction: calculateTopDistraction(sessions),
     topProductiveSite: calculateTopProductiveSite(sessions),
     level: levelInfo.level,
-    xp: totalXp,
-    xpIntoLevel: levelInfo.xpIntoLevel,
+    xp: levelInfo.xp,
+    xpIntoLevel: levelInfo.xp,
     xpForNextLevel: levelInfo.xpForNextLevel,
     xpProgress: levelInfo.xpProgress,
   };

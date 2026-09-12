@@ -43,18 +43,17 @@ export function renderProfileStats(root, stats, options = {}) {
 
   const characterId = options.characterId || "sleepbunny";
   const buddy = characterMeta(characterId);
-  const empty = !stats.hasSessions;
+  const emptyPrivate = !stats.hasSessions;
   const username = (options.username || "You").trim() || "You";
   const who = escapeHtml(username);
   const whose = `${who}'s`;
 
-  const streakHeadline = empty
-    ? `No Focus Streak yet`
-    : stats.focusStreakDays <= 0
-      ? `Start ${whose} Focus Streak today`
+  const streakHeadline =
+    stats.focusStreakDays <= 0
+      ? `No Focus Streak yet`
       : `${stats.focusStreakDays} day Focus Streak`;
 
-  const healthPct = empty ? 0 : stats.characterHealth;
+  const healthPct = emptyPrivate ? 0 : stats.characterHealth;
   const xpPct = Math.round(Math.min(1, Math.max(0, stats.xpProgress)) * 100);
 
   root.innerHTML = `
@@ -69,7 +68,7 @@ export function renderProfileStats(root, stats, options = {}) {
           <p class="profile-health-note">Make sure to stay on task to keep your companion healthy!</p>
           <p class="profile-health-label">
             Character Health
-            <span>${empty ? "—" : `${healthPct}% · ${stats.characterHealthLabel}`}</span>
+            <span>${emptyPrivate ? "—" : `${healthPct}% · ${stats.characterHealthLabel}`}</span>
           </p>
           <div
             class="profile-bar"
@@ -84,12 +83,12 @@ export function renderProfileStats(root, stats, options = {}) {
         </div>
       </div>
 
-      <div class="profile-flame-card profile-card-tone-a ${empty ? "is-empty" : ""}">
+      <div class="profile-streak-card profile-card-tone-a ${stats.focusStreakDays <= 0 ? "is-empty" : ""}">
         <p class="profile-stat-label">${whose} Focus Streak</p>
-        <p class="profile-flame-text">${streakHeadline}</p>
-        <p class="profile-flame-sub">
+        <p class="profile-streak-text">${streakHeadline}</p>
+        <p class="profile-streak-sub">
           ${
-            empty
+            stats.focusStreakDays <= 0
               ? "Complete at least one session a day to keep your streak going."
               : "Consecutive days with at least one completed session."
           }
@@ -109,39 +108,35 @@ export function renderProfileStats(root, stats, options = {}) {
           aria-valuenow="${stats.xpIntoLevel}"
           aria-label="XP progress to next level"
         >
-          <div class="profile-bar-fill profile-bar-xp" style="width: ${empty ? 0 : xpPct}%"></div>
+          <div class="profile-bar-fill profile-bar-xp" style="width: ${xpPct}%"></div>
         </div>
         <p class="profile-level-sub">
-          ${
-            empty
-              ? "Earn XP from focused minutes once sessions start syncing."
-              : `${stats.xpIntoLevel} / ${stats.xpForNextLevel} XP to Level ${stats.level + 1}`
-          }
+          ${stats.xpIntoLevel} / ${stats.xpForNextLevel} XP
         </p>
       </div>
 
       <div class="profile-stat-grid">
         <article class="profile-stat-tile profile-card-tone-b">
           <p class="profile-stat-label">${whose} Longest Focus Session</p>
-          <p class="profile-stat-value">${empty ? "—" : stats.longestSessionLabel}</p>
+          <p class="profile-stat-value">${emptyPrivate ? "—" : stats.longestSessionLabel}</p>
           <p class="profile-stat-hint">${
-            empty ? "No focus sessions yet" : "Longest completed session"
+            emptyPrivate ? "No focus sessions yet" : "Longest completed session"
           }</p>
         </article>
 
         <article class="profile-stat-tile profile-card-tone-b">
           <p class="profile-stat-label">${whose} Sessions Completed</p>
-          <p class="profile-stat-value">${empty ? "0" : String(stats.sessionsCompleted)}</p>
-          <p class="profile-stat-hint">${empty ? "No focus sessions yet" : "All-time completed sessions"}</p>
+          <p class="profile-stat-value">${emptyPrivate ? "0" : String(stats.sessionsCompleted)}</p>
+          <p class="profile-stat-hint">${emptyPrivate ? "No focus sessions yet" : "All-time completed sessions"}</p>
         </article>
 
         <article class="profile-stat-tile profile-card-tone-b">
           <p class="profile-stat-label">${whose} Top Distraction</p>
           <p class="profile-stat-value profile-stat-domain">${
-            empty || !stats.topDistraction ? "—" : escapeHtml(stats.topDistraction)
+            emptyPrivate || !stats.topDistraction ? "—" : escapeHtml(stats.topDistraction)
           }</p>
           <p class="profile-stat-hint">${
-            empty || !stats.topDistraction
+            emptyPrivate || !stats.topDistraction
               ? "No focus sessions yet"
               : "Site that pulled you away most"
           }</p>
@@ -150,10 +145,10 @@ export function renderProfileStats(root, stats, options = {}) {
         <article class="profile-stat-tile profile-card-tone-b">
           <p class="profile-stat-label">${whose} Top Productive Site</p>
           <p class="profile-stat-value profile-stat-domain">${
-            empty || !stats.topProductiveSite ? "—" : escapeHtml(stats.topProductiveSite)
+            emptyPrivate || !stats.topProductiveSite ? "—" : escapeHtml(stats.topProductiveSite)
           }</p>
           <p class="profile-stat-hint">${
-            empty || !stats.topProductiveSite
+            emptyPrivate || !stats.topProductiveSite
               ? "No focus sessions yet"
               : "Site you stayed on-task with most"
           }</p>

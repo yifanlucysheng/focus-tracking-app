@@ -173,7 +173,7 @@ export function mountAccountBar(root, options = {}) {
       <div class="auth-card auth-card-signed-in">
         <p class="field-label">Signed in</p>
         <p class="auth-username">@${escapeHtml(profile.username)}</p>
-        <p class="auth-meta">Level ${profile.focus_level} · ${profile.xp} XP · Flame ${profile.focus_flame}</p>
+        <p class="auth-meta">Level ${profile.focus_level} · ${profile.xp} XP · Streak ${profile.focus_streak ?? profile.focus_flame ?? 0}</p>
         <button id="auth-signout-btn" class="btn btn-secondary btn-small" type="button" ${busy ? "disabled" : ""}>
           Sign Out
         </button>

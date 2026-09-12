@@ -11,7 +11,7 @@
  */
 function compareProfiles(a, b, mode) {
   if (mode === "streak") {
-    // Focus Flame mode — sort by focus_flame (stored as focusStreak on FriendProfile)
+    // Focus Streak mode
     if (b.focusStreak !== a.focusStreak) return b.focusStreak - a.focusStreak;
     return String(a.username).localeCompare(String(b.username));
   }
@@ -80,15 +80,15 @@ export function generateComparisonMessage(entries, userId, mode) {
       (entry) => entry.profile.focusStreak > you.profile.focusStreak
     );
     if (ahead.length === 0) {
-      return "You have the hottest Focus Flame in your group.";
+      return "You have the hottest Focus Streak in your group.";
     }
 
     const leader = ahead[0].profile;
     const gap = leader.focusStreak - you.profile.focusStreak;
     if (gap === 1) {
-      return `You're 1 day behind ${leader.username}'s Focus Flame.`;
+      return `You're 1 day behind ${leader.username}'s Focus Streak.`;
     }
-    return `You're ${gap} days behind ${leader.username}'s Focus Flame.`;
+    return `You're ${gap} days behind ${leader.username}'s Focus Streak.`;
   }
 
   // Level mode

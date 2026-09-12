@@ -1,5 +1,10 @@
 import { loadProfileStore } from "./profile/profileStorage.js";
 import { calculateProfileStats } from "./profile/calculateStats.js";
+import {
+  loadPublicProfileFromSupabase,
+  mergePublicProfileIntoStats,
+  recordCompletedSession,
+} from "./profile/profileService.js";
 import { renderProfileStats } from "./profile/renderProfileStats.js";
 import {
   buildLeaderboardView,
@@ -85,6 +90,11 @@ let friendsRequestActionId = null;
 let friendsRequestsError = "";
 let friendsLeaderboardLoading = false;
 let friendsLeaderboardError = "";
+/** @type {Promise<void>|null} */
+let friendsLoadInFlight = null;
+let friendsSectionWasVisible = false;
+/** @type {IntersectionObserver|null} */
+let friendsSectionObserver = null;
 
 function applyCharacter(id) {
   const character = CHARACTERS[id];
@@ -118,8 +128,10 @@ function applyCharacter(id) {
 
 function refreshProfileStats() {
   const store = loadProfileStore();
-  const stats = calculateProfileStats(store);
+  const localStats = calculateProfileStats(store);
   const profile = getSignedInProfile();
+  // Public fields (xp / level / streak / username) come from Supabase profile.
+  const stats = mergePublicProfileIntoStats(localStats, profile);
   const username = profile?.username || "You";
   renderProfileStats(profileRoot, stats, {
     characterId: selectedCharacterId,
@@ -311,27 +323,79 @@ async function handleDeclineRequest(friendshipId) {
 }
 
 async function loadFriendsData() {
+  if (friendsLoadInFlight) return friendsLoadInFlight;
+
   friendsRequestsError = "";
   friendsLeaderboardError = "";
   friendsLeaderboardLoading = true;
   refreshFriendsLeaderboard();
 
-  try {
-    const [incoming, accepted] = await Promise.all([
-      getIncomingPendingRequests(),
-      getAcceptedFriends(),
-    ]);
-    incomingFriendRequests = incoming;
-    acceptedFriends = accepted;
-  } catch (err) {
-    const message = err?.message || "Could not load friends.";
-    friendsRequestsError = message;
-    friendsLeaderboardError = message;
-    console.error("[Focus Buddy] Friends load failed:", err);
-  } finally {
-    friendsLeaderboardLoading = false;
-    refreshFriendsLeaderboard();
-  }
+  friendsLoadInFlight = (async () => {
+    try {
+      const [incoming, accepted] = await Promise.all([
+        getIncomingPendingRequests(),
+        getAcceptedFriends(),
+      ]);
+      incomingFriendRequests = incoming;
+      acceptedFriends = accepted;
+    } catch (err) {
+      const message = err?.message || "Could not load friends.";
+      friendsRequestsError = message;
+      friendsLeaderboardError = message;
+      console.error("[Focus Buddy] Friends load failed:", err);
+    } finally {
+      friendsLeaderboardLoading = false;
+      friendsLoadInFlight = null;
+      refreshFriendsLeaderboard();
+    }
+  })();
+
+  return friendsLoadInFlight;
+}
+
+/**
+ * Refresh only the current user's row on the leaderboard after a successful
+ * public-stats sync (no extra Supabase friends fetch).
+ */
+function refreshCurrentUserOnLeaderboard() {
+  refreshFriendsLeaderboard();
+}
+
+/**
+ * Fetch latest accepted-friend profiles when the Friends section is opened
+ * or navigated to. Does not poll.
+ */
+function initFriendsSectionRefresh() {
+  const section = document.getElementById("friends");
+  if (!section || friendsSectionObserver) return;
+
+  friendsSectionObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          if (!friendsSectionWasVisible) {
+            friendsSectionWasVisible = true;
+            void loadFriendsData();
+          }
+        } else {
+          friendsSectionWasVisible = false;
+        }
+      }
+    },
+    { root: null, threshold: 0.15 }
+  );
+  friendsSectionObserver.observe(section);
+
+  const maybeLoadFromHash = () => {
+    if (location.hash === "#friends") void loadFriendsData();
+  };
+  window.addEventListener("hashchange", maybeLoadFromHash);
+
+  document.querySelectorAll('a[href="#friends"]').forEach((link) => {
+    link.addEventListener("click", () => {
+      void loadFriendsData();
+    });
+  });
 }
 
 function resetFriendsUiState() {
@@ -344,6 +408,8 @@ function resetFriendsUiState() {
   friendsRequestsError = "";
   friendsLeaderboardLoading = false;
   friendsLeaderboardError = "";
+  friendsSectionWasVisible = false;
+  friendsLoadInFlight = null;
 }
 
 function loadTask() {
@@ -520,6 +586,7 @@ function initDashboardOnce() {
   loadTask();
   loadSites();
   refreshProfileStats();
+  initFriendsSectionRefresh();
 }
 
 function showAuthScreen() {
@@ -554,6 +621,46 @@ function showDashboard(profile) {
   initDashboardOnce();
   refreshProfileStats();
   void loadFriendsData();
+  // Fetch authoritative public stats FROM Supabase — never push local on load.
+  void hydratePublicStatsFromSupabase();
+}
+
+/**
+ * Load public profile stats FROM Supabase and refresh the UI.
+ * Does not write to Supabase (avoids overwriting newer extension-written values).
+ */
+async function hydratePublicStatsFromSupabase() {
+  try {
+    const profile = await loadPublicProfileFromSupabase();
+    if (!profile) return;
+    signedInProfile = profile;
+    refreshProfileStats();
+    refreshCurrentUserOnLeaderboard();
+  } catch (err) {
+    console.error("[Focus Buddy] Failed to load public stats from Supabase:", err);
+  }
+}
+
+/**
+ * Call when a focus session ends. Updates local stats, syncs public fields,
+ * then refreshes the current user's leaderboard entry on success.
+ *
+ * @param {Parameters<typeof recordCompletedSession>[0]} sessionInput
+ */
+async function onFocusSessionCompleted(sessionInput) {
+  try {
+    const { profile } = await recordCompletedSession(sessionInput);
+    if (profile) {
+      signedInProfile = profile;
+      setCachedProfile(profile);
+    }
+    refreshProfileStats();
+    refreshCurrentUserOnLeaderboard();
+  } catch (err) {
+    console.error("[Focus Buddy] Session complete / sync failed:", err);
+    // Local stats may still have been saved inside recordCompletedSession.
+    refreshProfileStats();
+  }
 }
 
 async function bootApp() {
