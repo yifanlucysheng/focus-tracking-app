@@ -6,8 +6,9 @@
   }
 
   // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
-  const OVERLAY_VERSION = 15;
+  const OVERLAY_VERSION = 16;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
+  document.getElementById("focus-buddy-overlay-host")?.remove();
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
 
@@ -142,6 +143,33 @@
           bottom: auto;
           animation: focus-buddy-fall 1.8s cubic-bezier(0.15, 0.05, 0.25, 1) forwards;
         }
+        .chat-bubble {
+          position: fixed;
+          left: 148px;
+          bottom: 36px;
+          max-width: 240px;
+          padding: 10px 12px;
+          border-radius: 16px 16px 16px 4px;
+          background: #f7efd8;
+          color: #2a186b;
+          font: 14px/1.35 "Trebuchet MS", sans-serif;
+          box-shadow: 0 10px 24px rgba(42, 24, 107, 0.22);
+          pointer-events: auto;
+          cursor: pointer;
+          z-index: 2147483647;
+        }
+        .chat-bubble[hidden] {
+          display: none !important;
+        }
+        .chat-bubble .from {
+          margin: 0 0 4px;
+          font-size: 12px;
+          color: #646ca6;
+        }
+        .chat-bubble .text {
+          margin: 0;
+          word-wrap: break-word;
+        }
         @keyframes focus-buddy-fall {
           0% {
             transform: translateY(-156px);
@@ -158,6 +186,10 @@
         }
       </style>
       <img alt="Focus Buddy" />
+      <div class="chat-bubble" hidden>
+        <p class="from"></p>
+        <p class="text"></p>
+      </div>
     `;
     const mount = document.documentElement || document.body;
     mount.appendChild(host);
@@ -199,6 +231,7 @@
 
   function showOverlay(animate, payload) {
     const host = ensureHost();
+    host.dataset.lockIn = "1";
     const img = host.shadowRoot?.querySelector("img");
     if (!img) return;
 
@@ -241,8 +274,68 @@
     );
   }
 
+  let chatBubbleTimer = null;
+  let lastBubbleId = "";
+
+  function dismissChatBubble(removeIfIdle) {
+    const host = document.getElementById(HOST_ID);
+    const bubble = host?.shadowRoot?.querySelector(".chat-bubble");
+    if (bubble) bubble.hidden = true;
+    if (host) delete host.dataset.chatBubble;
+    if (chatBubbleTimer) {
+      clearTimeout(chatBubbleTimer);
+      chatBubbleTimer = null;
+    }
+    if (removeIfIdle && host && host.dataset.lockIn !== "1") {
+      host.remove();
+    }
+  }
+
+  function showChatBubble(payload) {
+    const messageId = String(payload?.messageId || "");
+    const text = String(payload?.text || "").trim();
+    if (!text || (messageId && messageId === lastBubbleId)) return;
+    lastBubbleId = messageId;
+
+    const host = ensureHost();
+    host.dataset.chatBubble = "1";
+    const img = host.shadowRoot?.querySelector("img");
+    const bubble = host.shadowRoot?.querySelector(".chat-bubble");
+    const fromEl = host.shadowRoot?.querySelector(".chat-bubble .from");
+    const textEl = host.shadowRoot?.querySelector(".chat-bubble .text");
+    if (img && !img.classList.contains("fall") && !img.classList.contains("rest")) {
+      img.classList.add("rest");
+    }
+    if (img && !img.getAttribute("src")) {
+      try {
+        chrome.runtime.sendMessage({ type: "GET_BUDDY_VISUAL" }, (response) => {
+          if (chrome.runtime.lastError || !response) {
+            img.src = extensionUrl(moonFileForHealth(100));
+            return;
+          }
+          applyBuddyVisual(response);
+        });
+      } catch {
+        img.src = extensionUrl(moonFileForHealth(100));
+      }
+    }
+    if (fromEl) fromEl.textContent = `@${payload?.fromUsername || "friend"}`;
+    if (textEl) textEl.textContent = text;
+    if (bubble) {
+      bubble.hidden = false;
+      bubble.onclick = () => dismissChatBubble(true);
+    }
+    if (chatBubbleTimer) clearTimeout(chatBubbleTimer);
+    chatBubbleTimer = setTimeout(() => dismissChatBubble(true), 14000);
+  }
+
   function hideOverlay() {
-    document.getElementById(HOST_ID)?.remove();
+    const host = document.getElementById(HOST_ID);
+    if (host?.dataset.chatBubble === "1") {
+      host.dataset.lockIn = "0";
+      return;
+    }
+    host?.remove();
   }
 
   function syncSelectedCharacterFromPage(characterId) {
@@ -280,6 +373,8 @@
           showOverlay(false, message);
         } else if (message.type === "OVERLAY_HIDE") {
           hideOverlay();
+        } else if (message.type === "CHAT_BUBBLE") {
+          showChatBubble(message);
         } else if (
           message.type === "BUDDY_VISUAL" ||
           message.type === "OVERLAY_MOOD" ||

@@ -17,6 +17,7 @@ export {
   getDocs,
   query,
   orderBy,
+  where,
   onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";

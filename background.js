@@ -424,9 +424,14 @@ try {
   );
 }
 
-// Auth (FocusBuddyAuth) is inlined into service-worker.js by
-// `npm run build:extension`. Do not importScripts the vendor bundle here —
-// Chrome MV3 often fails that fetch with "unknown error when fetching the script".
+if (!globalThis.FocusBuddyAuth) {
+  try {
+    importScripts("vendor/focusbuddy-auth.iife.js");
+  } catch {
+    // Packaged builds inline this bundle into service-worker.js instead.
+  }
+}
+
 if (!globalThis.FocusBuddyAuth) {
   console.error(
     "[Focus Buddy] Auth bundle missing. Run npm run build:extension and reload the extension."
@@ -504,6 +509,33 @@ const AUTH_READY = (async () => {
     };
   }
 })();
+
+AUTH_READY.then(() => {
+  if (!globalThis.FocusBuddyAuth?.startIncomingChatWatch) return;
+  globalThis.FocusBuddyAuth.startIncomingChatWatch((payload) => {
+    void broadcastChatBubble(payload);
+  });
+});
+
+async function broadcastChatBubble(payload) {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (tab.id == null) return;
+      try {
+        await chrome.tabs.sendMessage(tab.id, {
+          type: "CHAT_BUBBLE",
+          fromUid: payload.fromUid,
+          fromUsername: payload.fromUsername,
+          text: payload.text,
+          messageId: payload.messageId,
+        });
+      } catch {
+        // chrome://, Web Store, or tab with no content script.
+      }
+    })
+  );
+}
 
 /**
  * @returns {Promise<import('./chrome-auth/authService.js').ExtensionAuthState>}

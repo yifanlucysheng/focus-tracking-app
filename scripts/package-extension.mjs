@@ -123,6 +123,14 @@ for (const rel of popupWebModules) {
   REQUIRED_FILES.push(rel);
 }
 
+fs.cpSync(path.join(root, "web"), path.join(outDir, "web"), { recursive: true });
+fs.cpSync(path.join(root, "assets"), path.join(outDir, "assets"), { recursive: true });
+const couchDir = path.join(root, "couchareasprites");
+if (fs.existsSync(couchDir)) {
+  fs.cpSync(couchDir, path.join(outDir, "couchareasprites"), { recursive: true });
+}
+REQUIRED_FILES.push("web/index.html", "web/activity.html", "web/settings.html");
+
 // secrets: prefer real local secrets; fall back to example so the SW can load
 const secretsSrc = path.join(root, "secrets.local.js");
 const secretsExample = path.join(root, "secrets.local.example.js");
