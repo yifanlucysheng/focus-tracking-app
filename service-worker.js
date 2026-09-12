@@ -33789,8 +33789,10 @@ const MOON_STAGE_FILES = [
   "moonbuddysprites/stage4moon/stage4bunny.png",
   "moonbuddysprites/stage5moon/gravestone.png",
 ];
-/** One visual stage per full minute on-task or distracted. */
-const STAGE_STEP_MS = 60_000;
+/** 1 second distracted → −1 health. */
+const OFF_TASK_STEP_MS = 1_000;
+/** 2 seconds on-task → +1 health. */
+const ON_TASK_STEP_MS = 2_000;
 
 let taskKeywords = [];
 let lockInActive = false;
@@ -33809,7 +33811,7 @@ let sessionHealthStage = 0;
 /** @type {number} */
 let lockInStartedAt = 0;
 /**
- * Tracks accrued on-task / off-task time for stage changes.
+ * Tracks accrued on-task / off-task time for HP changes.
  * @type {{
  *   status: 'on-task'|'distracted'|null,
  *   tabId: number|null,
@@ -34037,7 +34039,7 @@ function noteFocusStatusForHealth(status, tabId) {
 }
 
 /**
- * Advance one visual stage per full minute on-task (happier) or distracted (sadder).
+ * Advance HP: −1 per 1s distracted, +1 per 2s on-task.
  * Uses wall-clock so a sleeping service worker still applies missed time on wake.
  */
 async function tickSessionHealth() {
@@ -34055,34 +34057,24 @@ async function tickSessionHealth() {
   }
 
   healthProgress.accruedMs += dt;
-  const steps = Math.floor(healthProgress.accruedMs / STAGE_STEP_MS);
-  if (steps < 1) {
-    void persistHealthProgress();
-    return;
-  }
-  healthProgress.accruedMs -= steps * STAGE_STEP_MS;
-
-  const selected = await chrome.storage.local.get(SELECTED_CHARACTER_KEY);
-  const characterId =
-    selected[SELECTED_CHARACTER_KEY] === "cat" ? "cat" : "sleepbunny";
 
   let next = sessionCharacterHealth;
   if (healthProgress.status === "on-task") {
-    if (characterId === "cat") {
-      const stage = Math.max(0, stageFromHealth(sessionCharacterHealth) - steps);
-      next = healthFromStage(stage);
-    } else {
-      const stage = Math.max(0, moonStageFromHealth(sessionCharacterHealth) - steps);
-      next = MOON_STAGE_HEALTH[stage];
+    const steps = Math.floor(healthProgress.accruedMs / ON_TASK_STEP_MS);
+    if (steps < 1) {
+      void persistHealthProgress();
+      return;
     }
+    healthProgress.accruedMs -= steps * ON_TASK_STEP_MS;
+    next = Math.min(SESSION_START_HEALTH, sessionCharacterHealth + steps);
   } else if (healthProgress.status === "distracted") {
-    if (characterId === "cat") {
-      const stage = Math.min(6, stageFromHealth(sessionCharacterHealth) + steps);
-      next = healthFromStage(stage);
-    } else {
-      const stage = Math.min(4, moonStageFromHealth(sessionCharacterHealth) + steps);
-      next = MOON_STAGE_HEALTH[stage];
+    const steps = Math.floor(healthProgress.accruedMs / OFF_TASK_STEP_MS);
+    if (steps < 1) {
+      void persistHealthProgress();
+      return;
     }
+    healthProgress.accruedMs -= steps * OFF_TASK_STEP_MS;
+    next = Math.max(0, sessionCharacterHealth - steps);
   } else {
     void persistHealthProgress();
     return;
@@ -34136,14 +34128,9 @@ try {
   );
 }
 
-if (!globalThis.FocusBuddyAuth) {
-  try {
-    importScripts("vendor/focusbuddy-auth.iife.js");
-  } catch {
-    // Packaged builds inline this bundle into service-worker.js instead.
-  }
-}
-
+// Auth (FocusBuddyAuth) is inlined into service-worker.js by
+// `npm run build:extension`. Do not importScripts the vendor bundle here —
+// Chrome MV3 often fails to fetch nested vendor scripts from the SW.
 if (!globalThis.FocusBuddyAuth) {
   console.error(
     "[Focus Buddy] Auth bundle missing. Run npm run build:extension and reload the extension."

@@ -6,7 +6,7 @@
   }
 
   // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
-  const OVERLAY_VERSION = 16;
+  const OVERLAY_VERSION = 21;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   document.getElementById("focus-buddy-overlay-host")?.remove();
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
@@ -51,6 +51,37 @@
     "moonbuddysprites/stage4moon/stage4bunny.png",
     "moonbuddysprites/stage5moon/gravestone.png",
   ];
+
+  const STAGE_SIZE_FACTOR = 1.25;
+  const OVERLAY_BASE_SIZE_PX = 125;
+
+  /**
+   * Stage 1 (healthiest) = 1×. Each worse stage multiplies size by 1.25.
+   * @param {"cat"|"sleepbunny"} characterId
+   * @param {number} health
+   * @returns {number}
+   */
+  function stageScaleForHealth(characterId, health) {
+    const parsed = Number(health);
+    const h = Number.isFinite(parsed)
+      ? Math.max(0, Math.min(100, parsed))
+      : 100;
+    let stepsFromStage1 = 0;
+    if (characterId === "cat") {
+      if (h >= 95) stepsFromStage1 = 0;
+      else if (h >= 80) stepsFromStage1 = 1;
+      else if (h >= 65) stepsFromStage1 = 2;
+      else if (h >= 50) stepsFromStage1 = 3;
+      else if (h >= 35) stepsFromStage1 = 4;
+      else if (h >= 20) stepsFromStage1 = 5;
+      else stepsFromStage1 = 6;
+    } else if (h >= 80) stepsFromStage1 = 0;
+    else if (h >= 60) stepsFromStage1 = 1;
+    else if (h >= 40) stepsFromStage1 = 2;
+    else if (h >= 20) stepsFromStage1 = 3;
+    else stepsFromStage1 = 4;
+    return STAGE_SIZE_FACTOR ** stepsFromStage1;
+  }
 
   /**
    * Moon Buddy stages 1–5 (even 20-point bands). Matches website.
@@ -222,8 +253,16 @@
   function applyBuddyVisual(payload) {
     const img = getImg();
     if (img) {
+      const characterId =
+        payload?.characterId === "cat" ? "cat" : "sleepbunny";
+      const health = Number(payload?.characterHealth);
+      const safeHealth = Number.isFinite(health) ? health : 100;
       const file = resolveBuddyFile(payload);
+      const scale = stageScaleForHealth(characterId, safeHealth);
+      const size = Math.round(OVERLAY_BASE_SIZE_PX * scale);
       img.src = extensionUrl(file);
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
     }
     // Always notify the page — health sync must not depend on the overlay host.
     notifyPageHealth(payload);
