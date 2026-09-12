@@ -238,11 +238,18 @@ body {
 }
 
 #activity-panel {
-  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 16px 20px;
 }
 
 .popup-activity-hint {
-  margin-bottom: 10px;
+  margin: 0;
+}
+
+#activity-panel .popup-activity-hint {
+  margin: 2px 0 2px;
 }
 
 .popup-activity {
@@ -256,14 +263,14 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .popup-activity-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--page);
