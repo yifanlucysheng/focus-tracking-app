@@ -715,7 +715,7 @@ body:has(.intro-section) .intro-section {
 /* —— Your stats: soft sky background —— */
 .stats-page {
   min-height: 100vh;
-  background-color: #9ec4e8;
+  background-color: #b8d4f0;
   background-image: url("../assets/sky-bg.jpg");
   background-repeat: no-repeat;
   background-size: cover;
@@ -723,8 +723,8 @@ body:has(.intro-section) .intro-section {
   background-attachment: fixed;
 }
 
-.stats-page .top-bar,
-.stats-page .subpage-bar {
+/* Keep the starred cream header; only clear the thin top accent bar. */
+.stats-page .top-bar {
   background-color: transparent;
   background-image: none;
 }
