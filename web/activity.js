@@ -10,7 +10,7 @@ const root = document.getElementById("activity-root");
 const banner = document.getElementById("activity-banner");
 
 function avatarSrc(characterId) {
-  return characterId === "cat" ? "/cat.png" : "/sleepbunny.png";
+  return characterId === "cat" ? "../cat.png" : "../sleepbunny.png";
 }
 
 function formatWeekly(ms) {

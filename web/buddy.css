@@ -1,6 +1,6 @@
 @font-face {
   font-family: "PP Mondwest";
-  src: url("/fonts/PPMondwest-Regular.otf") format("opentype");
+  src: url("../assets/fonts/PPMondwest-Regular.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: "LXGW Marker Gothic";
-  src: url("/fonts/LXGWMarkerGothic.ttf") format("truetype");
+  src: url("../assets/fonts/LXGWMarkerGothic.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -59,7 +59,7 @@ body {
   margin: -40px calc(50% - 50vw) 0;
   padding: 24px max(48px, calc((100vw - 1100px) / 2 + 48px)) 72px;
   background-color: #faf8f2;
-  background-image: url("/star-bg.png");
+  background-image: url("../assets/star-bg.png");
   background-repeat: repeat;
   background-size: 420px auto;
   background-position: top center;
@@ -68,7 +68,7 @@ body {
 /* Home: fill the viewport with stars and frame with cream bars */
 body:has(.intro-section) {
   background-color: #faf8f2;
-  background-image: url("/star-bg.png");
+  background-image: url("../assets/star-bg.png");
   background-repeat: repeat;
   background-size: 420px auto;
   background-position: top center;
@@ -163,7 +163,7 @@ body:has(.intro-section) .intro-section {
   margin: 0 calc(50% - 50vw) 0;
   padding: 24px max(48px, calc((100vw - 1100px) / 2 + 48px)) 20px;
   background-color: #faf8f2;
-  background-image: url("/star-bg.png");
+  background-image: url("../assets/star-bg.png");
   background-repeat: repeat;
   background-size: 420px auto;
   background-position: top center;
@@ -236,11 +236,11 @@ body:has(.intro-section) .intro-section {
 
 .logo-star {
   position: absolute;
-  top: 0.02em;
-  right: -0.28em;
-  width: 0.32em;
-  height: 0.32em;
-  object-fit: contain;
+  top: 0.06em;
+  right: -0.18em;
+  width: 0.22em;
+  height: 0.22em;
+  fill: var(--focus);
 }
 
 .tagline {

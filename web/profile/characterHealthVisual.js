@@ -53,8 +53,8 @@ export function healthForStage(stage) {
  */
 export function catBuddySrcForHealth(health) {
   const stage = characterHealthStage(health);
-  if (stage <= 0) return "/cat.png";
-  return `/cat${stage + 1}.png`;
+  if (stage <= 0) return "../cat.png";
+  return `../cat${stage + 1}.png`;
 }
 
 /**
@@ -71,7 +71,7 @@ export function buddyVisualForHealth(characterId, health = SESSION_START_HEALTH)
     };
   }
   return {
-    src: "/sleepbunny.png",
+    src: "../sleepbunny.png",
     alt: "",
     name: "Moon Buddy",
   };
