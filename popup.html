@@ -5,13 +5,15 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="task-section"></div>
+    <div id="task-section">
+      <input type="text" id="task-text" placeholder="What are you working on?" />
+    </div>
     <div id="timer-section">
       <div id="timer-display">25:00</div>
       <button id="start-task-btn" type="button">Start Focus</button>
     </div>
     <div id="character-section">
-      <div id="character-img" class="character-placeholder on-task" aria-label="on-task"></div>
+      <img id="character-img" class="on-task" src="sleepbunny.png" alt="on-task" />
       <div id="summary-section" hidden>
         <p id="summary-text"></p>
       </div>

@@ -1,4 +1,4 @@
-// Popup script — timer & character sections
+// Popup script — task input, timer & character sections
 
 const DEFAULT_SECONDS = 25 * 60;
 const LOG_POLL_MS = 10_000;
@@ -12,6 +12,42 @@ const startBtn = document.getElementById("start-task-btn");
 const characterImg = document.getElementById("character-img");
 const summarySection = document.getElementById("summary-section");
 const summaryText = document.getElementById("summary-text");
+
+function getLinksForTask(taskText) {
+  const text = taskText.toLowerCase();
+
+  const keywordLinks = {
+    chemistry: [
+      "https://www.chemguide.co.uk/",
+      "https://ptable.com/",
+      "https://www.khanacademy.org/science/chemistry",
+    ],
+    essay: [
+      "https://www.citationmachine.net/",
+      "https://docs.google.com/document/create",
+    ],
+  };
+
+  for (const keyword of Object.keys(keywordLinks)) {
+    if (text.includes(keyword)) {
+      return keywordLinks[keyword];
+    }
+  }
+
+  return [
+    "https://www.google.com/search?q=" + encodeURIComponent(taskText),
+  ];
+}
+
+function openTaskTabs() {
+  const taskText = document.getElementById("task-text")?.value?.trim() ?? "";
+  if (!taskText) return;
+
+  chrome.runtime.sendMessage({
+    type: "OPEN_TASK_TABS",
+    links: getLinksForTask(taskText),
+  });
+}
 
 function formatTime(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -37,9 +73,8 @@ function setCharacterMood(status) {
   characterImg.classList.add(isOnTask ? "on-task" : "distracted");
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
 
-  // Prefer image assets when available; otherwise keep colored placeholder div.
   if (characterImg.tagName === "IMG") {
-    characterImg.src = isOnTask ? "happy.png" : "sad.png";
+    characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
   }
 }
 
@@ -50,7 +85,10 @@ function requestFocusLog(callback) {
         callback(null);
         return;
       }
-      callback(response?.focusLog ?? null);
+      const focusLog = Array.isArray(response)
+        ? response
+        : (response?.focusLog ?? null);
+      callback(focusLog);
     });
   } catch {
     callback(null);
@@ -111,6 +149,7 @@ function startTimer() {
   summarySection.hidden = true;
   startBtn.disabled = true;
 
+  openTaskTabs();
   pollLatestFocusStatus();
   countdownId = setInterval(tick, 1000);
   logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
