@@ -191,6 +191,225 @@ body {
   outline-offset: 3px;
 }
 
+/* —— Dashboard —— */
+.dashboard {
+  margin-top: 64px;
+  padding-bottom: 24px;
+}
+
+.dash-rule {
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--cream) 0%, rgba(100, 108, 166, 0.35) 55%, transparent 100%);
+  margin-bottom: 28px;
+}
+
+.dash-title {
+  margin: 0 0 28px;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: clamp(40px, 6vw, 64px);
+  font-weight: 400;
+  color: var(--focus);
+  letter-spacing: -0.02em;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 36px 40px;
+  align-items: start;
+}
+
+.dash-timer {
+  grid-column: 1 / -1;
+}
+
+.dash-panel {
+  min-width: 0;
+}
+
+.field-label {
+  display: block;
+  margin: 0 0 10px;
+  color: var(--buddy);
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.field-input {
+  width: 100%;
+  appearance: none;
+  border: none;
+  border-bottom: 2px solid rgba(42, 24, 107, 0.22);
+  background: transparent;
+  padding: 10px 2px 12px;
+  color: var(--ink);
+  font-family: "LXGW Marker Gothic", sans-serif;
+  font-size: 22px;
+  line-height: 1.3;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.field-input::placeholder {
+  color: rgba(100, 108, 166, 0.55);
+}
+
+.field-input:focus {
+  border-bottom-color: var(--tagline);
+}
+
+.site-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.site-row .field-input {
+  flex: 1;
+}
+
+.site-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.site-list:empty {
+  display: none;
+}
+
+.site-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--focus);
+  font-size: 16px;
+}
+
+.site-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-chip button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--buddy);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.site-chip button:hover {
+  color: var(--focus);
+}
+
+.duration-row {
+  display: flex;
+  gap: 28px;
+  margin-bottom: 28px;
+}
+
+.duration-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.duration-field span {
+  color: var(--buddy);
+  font-size: 18px;
+}
+
+.duration-input {
+  width: 120px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-display {
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: clamp(72px, 12vw, 120px);
+  line-height: 1;
+  color: var(--focus);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  margin: 8px 0 24px;
+}
+
+.timer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 22px;
+  font-family: "LXGW Marker Gothic", sans-serif;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn-primary {
+  color: #fff;
+  background: var(--focus);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #221456;
+}
+
+.btn-secondary {
+  color: var(--focus);
+  background: var(--cream);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #f0e4c4;
+}
+
+.btn-end {
+  color: #fff;
+  background: #9b4d6c;
+}
+
+.btn-end:hover:not(:disabled) {
+  background: #833e5a;
+}
+
+.timer-status {
+  min-height: 1.4em;
+  margin: 18px 0 0;
+  color: var(--tagline);
+  font-size: 20px;
+}
+
 @media (max-width: 900px) {
   .page {
     padding: 28px 24px 48px;
@@ -212,6 +431,11 @@ body {
     width: 110px;
     height: 110px;
   }
+
+  .dash-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -225,5 +449,14 @@ body {
 
   .picker-copy {
     max-width: none;
+  }
+
+  .site-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .duration-row {
+    gap: 16px;
   }
 }

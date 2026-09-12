@@ -57,6 +57,63 @@
           </button>
         </div>
       </section>
+
+      <section class="dashboard" aria-label="Focus dashboard">
+        <div class="dash-rule" aria-hidden="true"></div>
+        <h2 class="dash-title">Your focus session</h2>
+
+        <div class="dash-grid">
+          <div class="dash-panel dash-task">
+            <label class="field-label" for="task-input">What are you working on?</label>
+            <input
+              id="task-input"
+              class="field-input"
+              type="text"
+              placeholder="Write an essay, study chemistry…"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="dash-panel dash-sites">
+            <label class="field-label" for="site-input">Allowed websites</label>
+            <div class="site-row">
+              <input
+                id="site-input"
+                class="field-input"
+                type="url"
+                placeholder="https://docs.google.com"
+                autocomplete="off"
+              />
+              <button id="add-site-btn" class="btn btn-secondary" type="button">Add</button>
+            </div>
+            <ul id="site-list" class="site-list" aria-live="polite"></ul>
+          </div>
+
+          <div class="dash-panel dash-timer">
+            <p class="field-label">Session length</p>
+            <div class="duration-row">
+              <label class="duration-field">
+                <span>Hours</span>
+                <input id="hours-input" class="field-input duration-input" type="number" min="0" max="12" value="0" />
+              </label>
+              <label class="duration-field">
+                <span>Minutes</span>
+                <input id="minutes-input" class="field-input duration-input" type="number" min="0" max="59" value="25" />
+              </label>
+            </div>
+
+            <div id="timer-display" class="timer-display" aria-live="polite">25:00</div>
+
+            <div class="timer-controls">
+              <button id="start-timer-btn" class="btn btn-primary" type="button">Start</button>
+              <button id="pause-timer-btn" class="btn btn-secondary" type="button" disabled>Pause</button>
+              <button id="end-timer-btn" class="btn btn-end" type="button" disabled>End</button>
+            </div>
+
+            <p id="timer-status" class="timer-status" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <script src="buddy.js"></script>
