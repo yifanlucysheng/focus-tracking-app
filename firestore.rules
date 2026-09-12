@@ -65,18 +65,19 @@ service cloud.firestore {
 
     match /friends/{uid}/accepted/{otherUid} {
       allow read: if isOwner(uid) || request.auth.uid == otherUid;
-      allow create: if signedIn() && (
+      // Owner can save their own friend list. The other person may also
+      // write this doc when accepting a request (or retrying after a partial accept).
+      allow create, update: if signedIn() && uid != otherUid && (
         isOwner(uid)
         || (
           request.auth.uid == otherUid
           && (
-            exists(/databases/$(database)/documents/friendRequests/$(otherUid)/incoming/$(uid))
-            || exists(/databases/$(database)/documents/friends/$(otherUid)/accepted/$(uid))
+            exists(/databases/$(database)/documents/friendRequests/$(request.auth.uid)/incoming/$(uid))
+            || exists(/databases/$(database)/documents/friends/$(request.auth.uid)/accepted/$(uid))
           )
         )
       );
       allow delete: if isOwner(uid) || request.auth.uid == otherUid;
-      allow update: if false;
     }
 
     match /friendRequests/{uid}/incoming/{fromUid} {

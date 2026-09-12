@@ -294,9 +294,19 @@ export async function acceptFriendRequest(fromUid) {
   if (!uid) throw new Error("Sign in first.");
   await loadSdk();
   const { doc, setDoc, deleteDoc } = firestoreFns;
-  await setDoc(doc(db, "friends", uid, "accepted", fromUid), { uid: fromUid, since: Date.now() });
-  await setDoc(doc(db, "friends", fromUid, "accepted", uid), { uid, since: Date.now() });
-  await deleteDoc(doc(db, "friendRequests", uid, "incoming", fromUid));
+  try {
+    await setDoc(doc(db, "friends", uid, "accepted", fromUid), { uid: fromUid, since: Date.now() });
+    await setDoc(doc(db, "friends", fromUid, "accepted", uid), { uid, since: Date.now() });
+    await deleteDoc(doc(db, "friendRequests", uid, "incoming", fromUid));
+  } catch (error) {
+    const raw = String(error?.message || error || "");
+    if (/permission|insufficient/i.test(raw)) {
+      throw new Error(
+        "Firestore rules are blocking friend accept. In Firebase Console open Firestore → Rules, paste firestore.rules from this project, and click Publish."
+      );
+    }
+    throw error;
+  }
 }
 
 export async function rejectFriendRequest(fromUid) {
