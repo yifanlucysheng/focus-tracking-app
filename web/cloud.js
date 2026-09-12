@@ -515,3 +515,67 @@ export async function clearSpotifyTokens() {
   await deleteDoc(doc(db, "users", uid, "private", "spotify"));
   await clearNowPlaying();
 }
+
+export function chatIdFor(otherUid) {
+  const uid = currentUid();
+  if (!uid || !otherUid) return null;
+  return [uid, otherUid].sort().join("_");
+}
+
+export async function ensureChat(otherUid) {
+  const uid = currentUid();
+  if (!uid) throw new Error("Sign in first.");
+  if (!otherUid || otherUid === uid) throw new Error("Pick a friend to message.");
+  await loadSdk();
+  const { doc, setDoc } = firestoreFns;
+  const members = [uid, otherUid].sort();
+  const chatId = members.join("_");
+  await setDoc(
+    doc(db, "chats", chatId),
+    { members, updatedAt: Date.now() },
+    { merge: true }
+  );
+  return chatId;
+}
+
+export async function sendChatMessage(otherUid, text) {
+  const uid = currentUid();
+  const trimmed = String(text || "").trim();
+  if (!trimmed) throw new Error("Type a message first.");
+  if (trimmed.length > 400) throw new Error("Keep messages under 400 characters.");
+  const chatId = await ensureChat(otherUid);
+  await loadSdk();
+  const { doc, setDoc } = firestoreFns;
+  const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  await setDoc(doc(db, "chats", chatId, "messages", messageId), {
+    fromUid: uid,
+    text: trimmed,
+    createdAt: Date.now(),
+  });
+  return messageId;
+}
+
+/**
+ * @param {string} otherUid
+ * @param {(messages: Array<{id: string, fromUid: string, text: string, createdAt: number}>) => void} callback
+ * @returns {Promise<() => void>}
+ */
+export async function listenChatMessages(otherUid, callback) {
+  const chatId = await ensureChat(otherUid);
+  await loadSdk();
+  const { collection, query, orderBy, onSnapshot } = firestoreFns;
+  if (typeof onSnapshot !== "function") {
+    callback([]);
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(db, "chats", chatId, "messages"), orderBy("createdAt", "asc")),
+    (snap) => {
+      callback(snap.docs.map((item) => ({ id: item.id, ...item.data() })));
+    },
+    (err) => {
+      console.warn("[Focus Buddy] Chat listener failed:", err);
+      callback([]);
+    }
+  );
+}

@@ -8,7 +8,7 @@
  * @returns {string}
  */
 function avatarSrc(characterId) {
-  return characterId === "cat" ? "../cat.png" : "../moonbuddysprites/stage1moon/yaybunny.png";
+  return characterId === "cat" ? "/cat.png" : "/moon1.png";
 }
 
 /**
