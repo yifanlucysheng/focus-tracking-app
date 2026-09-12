@@ -13,7 +13,9 @@ const preview = document.getElementById("character-preview");
 const options = Array.from(document.querySelectorAll(".buddy-option"));
 
 const STORAGE_KEY = "focusBuddy.selectedCharacter";
-const SITES_KEY = "focusBuddy.allowedSites";
+const BLOCK_SITES_KEY = "focusBuddy.blockSites";
+const ALLOW_SITES_KEY = "focusBuddy.alwaysAllowSites";
+const LEGACY_SITES_KEY = "focusBuddy.allowedSites";
 const TASK_KEY = "focusBuddy.task";
 
 function applyCharacter(id) {
@@ -57,24 +59,19 @@ try {
 
 applyCharacter(initial);
 
-/* —— Dashboard: task, sites, timer —— */
+/* —— Dashboard: task + sites —— */
 
 const taskInput = document.getElementById("task-input");
-const siteInput = document.getElementById("site-input");
-const addSiteBtn = document.getElementById("add-site-btn");
-const siteList = document.getElementById("site-list");
-const hoursInput = document.getElementById("hours-input");
-const minutesInput = document.getElementById("minutes-input");
-const timerDisplay = document.getElementById("timer-display");
-const startBtn = document.getElementById("start-timer-btn");
-const pauseBtn = document.getElementById("pause-timer-btn");
-const endBtn = document.getElementById("end-timer-btn");
-const timerStatus = document.getElementById("timer-status");
+const blockSiteInput = document.getElementById("block-site-input");
+const addBlockSiteBtn = document.getElementById("add-block-site-btn");
+const blockSiteList = document.getElementById("block-site-list");
+const allowSiteInput = document.getElementById("allow-site-input");
+const addAllowSiteBtn = document.getElementById("add-allow-site-btn");
+const allowSiteList = document.getElementById("allow-site-list");
+const sitesStatus = document.getElementById("sites-status");
 
-let allowedSites = [];
-let remainingSeconds = 25 * 60;
-let countdownId = null;
-let isPaused = false;
+let blockSites = [];
+let allowSites = [];
 
 function loadTask() {
   try {
@@ -93,20 +90,31 @@ function saveTask() {
   }
 }
 
-function loadSites() {
+function readStoredList(key) {
   try {
-    const raw = localStorage.getItem(SITES_KEY);
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
-    allowedSites = Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    allowedSites = [];
+    return [];
   }
-  renderSites();
 }
 
-function saveSites() {
+function loadSites() {
+  blockSites = readStoredList(BLOCK_SITES_KEY);
+  if (blockSites.length === 0) {
+    // Migrate older single-list data into the block list once.
+    blockSites = readStoredList(LEGACY_SITES_KEY);
+  }
+  allowSites = readStoredList(ALLOW_SITES_KEY);
+  renderSiteList(blockSiteList, blockSites, "block");
+  renderSiteList(allowSiteList, allowSites, "allow");
+}
+
+function saveSiteLists() {
   try {
-    localStorage.setItem(SITES_KEY, JSON.stringify(allowedSites));
+    localStorage.setItem(BLOCK_SITES_KEY, JSON.stringify(blockSites));
+    localStorage.setItem(ALLOW_SITES_KEY, JSON.stringify(allowSites));
   } catch {
     // Ignore.
   }
@@ -126,11 +134,11 @@ function normalizeSite(value) {
   }
 }
 
-function renderSites() {
-  if (!siteList) return;
-  siteList.innerHTML = "";
+function renderSiteList(listEl, sites, kind) {
+  if (!listEl) return;
+  listEl.innerHTML = "";
 
-  allowedSites.forEach((site, index) => {
+  sites.forEach((site, index) => {
     const li = document.createElement("li");
     li.className = "site-chip";
 
@@ -142,170 +150,81 @@ function renderSites() {
     remove.setAttribute("aria-label", `Remove ${site}`);
     remove.textContent = "×";
     remove.addEventListener("click", () => {
-      allowedSites.splice(index, 1);
-      saveSites();
-      renderSites();
+      sites.splice(index, 1);
+      saveSiteLists();
+      renderSiteList(listEl, sites, kind);
     });
 
     li.append(label, remove);
-    siteList.appendChild(li);
+    listEl.appendChild(li);
   });
 }
 
-function addSite() {
-  const site = normalizeSite(siteInput?.value ?? "");
+function addSiteToList({ input, sites, otherSites, listEl, kind }) {
+  const site = normalizeSite(input?.value ?? "");
   if (!site) {
-    if (timerStatus) timerStatus.textContent = "Enter a valid website URL.";
+    if (sitesStatus) sitesStatus.textContent = "Enter a valid website URL.";
     return;
   }
 
-  if (allowedSites.includes(site)) {
-    if (timerStatus) timerStatus.textContent = "That site is already on your list.";
+  if (sites.includes(site)) {
+    if (sitesStatus) sitesStatus.textContent = "That site is already on this list.";
     return;
   }
 
-  allowedSites.push(site);
-  saveSites();
-  renderSites();
-  if (siteInput) siteInput.value = "";
-  if (timerStatus) timerStatus.textContent = "";
-}
-
-function clampNumber(value, min, max) {
-  const n = Number.parseInt(value, 10);
-  if (Number.isNaN(n)) return min;
-  return Math.min(max, Math.max(min, n));
-}
-
-function readDurationSeconds() {
-  const hours = clampNumber(hoursInput?.value ?? 0, 0, 12);
-  const minutes = clampNumber(minutesInput?.value ?? 0, 0, 59);
-  if (hoursInput) hoursInput.value = String(hours);
-  if (minutesInput) minutesInput.value = String(minutes);
-  const total = hours * 3600 + minutes * 60;
-  return total > 0 ? total : 60;
-}
-
-function formatTime(totalSeconds) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  }
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function updateTimerDisplay() {
-  if (timerDisplay) timerDisplay.textContent = formatTime(remainingSeconds);
-}
-
-function setTimerControls({ running, paused }) {
-  if (startBtn) startBtn.disabled = running || paused;
-  if (pauseBtn) {
-    pauseBtn.disabled = !running && !paused;
-    pauseBtn.textContent = paused ? "Resume" : "Pause";
-  }
-  if (endBtn) endBtn.disabled = !running && !paused;
-
-  const durationDisabled = running || paused;
-  if (hoursInput) hoursInput.disabled = durationDisabled;
-  if (minutesInput) minutesInput.disabled = durationDisabled;
-}
-
-function clearCountdown() {
-  if (countdownId !== null) {
-    clearInterval(countdownId);
-    countdownId = null;
-  }
-}
-
-function tick() {
-  remainingSeconds -= 1;
-  updateTimerDisplay();
-
-  if (remainingSeconds <= 0) {
-    remainingSeconds = 0;
-    updateTimerDisplay();
-    clearCountdown();
-    isPaused = false;
-    setTimerControls({ running: false, paused: false });
-    const task = taskInput?.value?.trim();
-    if (timerStatus) {
-      timerStatus.textContent = task
-        ? `Session complete — nice work on “${task}”.`
-        : "Session complete — nice work!";
+  if (otherSites.includes(site)) {
+    if (sitesStatus) {
+      sitesStatus.textContent =
+        kind === "block"
+          ? "That site is already in Always Allow."
+          : "That site is already in your block list.";
     }
-  }
-}
-
-function startTimer() {
-  if (countdownId !== null || isPaused) return;
-
-  saveTask();
-  remainingSeconds = readDurationSeconds();
-  updateTimerDisplay();
-  isPaused = false;
-  setTimerControls({ running: true, paused: false });
-
-  const task = taskInput?.value?.trim();
-  if (timerStatus) {
-    timerStatus.textContent = task ? `Focusing on “${task}”…` : "Focus session running…";
-  }
-
-  countdownId = setInterval(tick, 1000);
-}
-
-function pauseOrResumeTimer() {
-  if (!isPaused && countdownId === null) return;
-
-  if (isPaused) {
-    isPaused = false;
-    setTimerControls({ running: true, paused: false });
-    if (timerStatus) timerStatus.textContent = "Session resumed.";
-    countdownId = setInterval(tick, 1000);
     return;
   }
 
-  isPaused = true;
-  clearCountdown();
-  setTimerControls({ running: false, paused: true });
-  if (timerStatus) timerStatus.textContent = "Paused.";
+  sites.push(site);
+  saveSiteLists();
+  renderSiteList(listEl, sites, kind);
+  if (input) input.value = "";
+  if (sitesStatus) sitesStatus.textContent = "";
 }
 
-function endTimer() {
-  clearCountdown();
-  isPaused = false;
-  remainingSeconds = readDurationSeconds();
-  updateTimerDisplay();
-  setTimerControls({ running: false, paused: false });
-  if (timerStatus) timerStatus.textContent = "Session ended.";
+function addBlockSite() {
+  addSiteToList({
+    input: blockSiteInput,
+    sites: blockSites,
+    otherSites: allowSites,
+    listEl: blockSiteList,
+    kind: "block",
+  });
 }
 
-function syncDisplayFromInputs() {
-  if (countdownId !== null || isPaused) return;
-  remainingSeconds = readDurationSeconds();
-  updateTimerDisplay();
+function addAllowSite() {
+  addSiteToList({
+    input: allowSiteInput,
+    sites: allowSites,
+    otherSites: blockSites,
+    listEl: allowSiteList,
+    kind: "allow",
+  });
 }
 
 taskInput?.addEventListener("change", saveTask);
 taskInput?.addEventListener("blur", saveTask);
-addSiteBtn?.addEventListener("click", addSite);
-siteInput?.addEventListener("keydown", (event) => {
+addBlockSiteBtn?.addEventListener("click", addBlockSite);
+addAllowSiteBtn?.addEventListener("click", addAllowSite);
+blockSiteInput?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
-    addSite();
+    addBlockSite();
   }
 });
-hoursInput?.addEventListener("input", syncDisplayFromInputs);
-minutesInput?.addEventListener("input", syncDisplayFromInputs);
-startBtn?.addEventListener("click", startTimer);
-pauseBtn?.addEventListener("click", pauseOrResumeTimer);
-endBtn?.addEventListener("click", endTimer);
+allowSiteInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addAllowSite();
+  }
+});
 
 loadTask();
 loadSites();
-remainingSeconds = readDurationSeconds();
-updateTimerDisplay();
-setTimerControls({ running: false, paused: false });

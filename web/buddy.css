@@ -34,6 +34,7 @@ body {
   background: var(--page);
   color: var(--ink);
   font-family: "LXGW Marker Gothic", "Trebuchet MS", sans-serif;
+  overflow-x: hidden;
 }
 
 .top-bar {
@@ -197,20 +198,101 @@ body {
   padding-bottom: 24px;
 }
 
-.dash-rule {
-  height: 3px;
-  width: 100%;
-  background: linear-gradient(90deg, var(--cream) 0%, rgba(100, 108, 166, 0.35) 55%, transparent 100%);
-  margin-bottom: 28px;
+.section-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100vw;
+  margin: 56px 0 36px;
+  margin-left: calc(50% - 50vw);
+  padding: 20px max(24px, calc((100vw - 1100px) / 2 + 48px));
+  border-radius: 0;
+  background: var(--cream);
+  border: none;
+  border-top: 2px solid rgba(100, 108, 166, 0.22);
+  border-bottom: 2px solid rgba(100, 108, 166, 0.22);
+  box-shadow: none;
 }
 
-.dash-title {
-  margin: 0 0 28px;
+.section-divider:first-child {
+  margin-top: 72px;
+}
+
+.section-divider-ornament {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.section-divider-ornament[data-side="left"] {
+  justify-content: flex-end;
+}
+
+.section-divider-ornament[data-side="right"] {
+  justify-content: flex-start;
+}
+
+.section-divider-ornament svg {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.ornament-star {
+  width: 22px;
+  height: 22px;
+  fill: var(--focus);
+}
+
+.ornament-star-sm {
+  width: 14px;
+  height: 14px;
+  fill: var(--buddy);
+  opacity: 0.9;
+}
+
+.ornament-moon {
+  width: 20px;
+  height: 20px;
+  fill: var(--tagline);
+}
+
+.section-divider-label {
+  flex: 0 0 auto;
   font-family: "PP Mondwest", "Courier New", monospace;
-  font-size: clamp(40px, 6vw, 64px);
-  font-weight: 400;
+  font-size: clamp(28px, 4vw, 40px);
   color: var(--focus);
-  letter-spacing: -0.02em;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  padding: 0 6px;
+}
+
+@media (max-width: 640px) {
+  .section-divider {
+    gap: 10px;
+    padding: 16px 4px;
+  }
+
+  .section-divider-ornament {
+    gap: 6px;
+  }
+
+  .ornament-star {
+    width: 16px;
+    height: 16px;
+  }
+
+  .ornament-star-sm {
+    width: 11px;
+    height: 11px;
+  }
+
+  .ornament-moon {
+    width: 15px;
+    height: 15px;
+  }
 }
 
 .dash-grid {
@@ -220,12 +302,14 @@ body {
   align-items: start;
 }
 
-.dash-timer {
-  grid-column: 1 / -1;
-}
-
 .dash-panel {
   min-width: 0;
+}
+
+.site-group + .site-group {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(100, 108, 166, 0.22);
 }
 
 .field-label {
@@ -263,10 +347,18 @@ body {
   display: flex;
   gap: 12px;
   align-items: flex-end;
+  max-width: 520px;
 }
 
 .site-row .field-input {
   flex: 1;
+  min-width: 0;
+}
+
+.site-row .btn-small {
+  flex: 0 0 auto;
+  width: auto;
+  align-self: flex-end;
 }
 
 .site-list {
@@ -316,46 +408,6 @@ body {
   color: var(--focus);
 }
 
-.duration-row {
-  display: flex;
-  gap: 28px;
-  margin-bottom: 28px;
-}
-
-.duration-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 120px;
-}
-
-.duration-field span {
-  color: var(--buddy);
-  font-size: 18px;
-}
-
-.duration-input {
-  width: 120px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.timer-display {
-  font-family: "PP Mondwest", "Courier New", monospace;
-  font-size: clamp(72px, 12vw, 120px);
-  line-height: 1;
-  color: var(--focus);
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  margin: 8px 0 24px;
-}
-
-.timer-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
 .btn {
   appearance: none;
   border: none;
@@ -376,15 +428,6 @@ body {
   cursor: default;
 }
 
-.btn-primary {
-  color: #fff;
-  background: var(--focus);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #221456;
-}
-
 .btn-secondary {
   color: var(--focus);
   background: var(--cream);
@@ -394,20 +437,18 @@ body {
   background: #f0e4c4;
 }
 
-.btn-end {
-  color: #fff;
-  background: #9b4d6c;
+.btn-small {
+  padding: 6px 14px;
+  font-size: 16px;
+  border-radius: 10px;
+  width: fit-content;
 }
 
-.btn-end:hover:not(:disabled) {
-  background: #833e5a;
-}
-
-.timer-status {
+.sites-status {
   min-height: 1.4em;
   margin: 18px 0 0;
   color: var(--tagline);
-  font-size: 20px;
+  font-size: 18px;
 }
 
 @media (max-width: 900px) {
@@ -452,11 +493,11 @@ body {
   }
 
   .site-row {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: flex-end;
   }
 
-  .duration-row {
-    gap: 16px;
+  .site-row .btn-small {
+    width: fit-content;
   }
 }

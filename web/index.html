@@ -59,8 +59,31 @@
       </section>
 
       <section class="dashboard" aria-label="Focus dashboard">
-        <div class="dash-rule" aria-hidden="true"></div>
-        <h2 class="dash-title">Your focus session</h2>
+        <div class="section-divider" aria-hidden="true">
+          <span class="section-divider-ornament" data-side="left">
+            <svg class="ornament-star" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+            <svg class="ornament-moon" viewBox="0 0 24 24">
+              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
+            </svg>
+            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+          </span>
+          <span class="section-divider-label">Your focus session</span>
+          <span class="section-divider-ornament" data-side="right">
+            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+            <svg class="ornament-moon" viewBox="0 0 24 24">
+              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
+            </svg>
+            <svg class="ornament-star" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+          </span>
+        </div>
 
         <div class="dash-grid">
           <div class="dash-panel dash-task">
@@ -75,42 +98,37 @@
           </div>
 
           <div class="dash-panel dash-sites">
-            <label class="field-label" for="site-input">Allowed websites</label>
-            <div class="site-row">
-              <input
-                id="site-input"
-                class="field-input"
-                type="url"
-                placeholder="https://docs.google.com"
-                autocomplete="off"
-              />
-              <button id="add-site-btn" class="btn btn-secondary" type="button">Add</button>
-            </div>
-            <ul id="site-list" class="site-list" aria-live="polite"></ul>
-          </div>
-
-          <div class="dash-panel dash-timer">
-            <p class="field-label">Session length</p>
-            <div class="duration-row">
-              <label class="duration-field">
-                <span>Hours</span>
-                <input id="hours-input" class="field-input duration-input" type="number" min="0" max="12" value="0" />
-              </label>
-              <label class="duration-field">
-                <span>Minutes</span>
-                <input id="minutes-input" class="field-input duration-input" type="number" min="0" max="59" value="25" />
-              </label>
+            <div class="site-group">
+              <label class="field-label" for="block-site-input">Specific sites you want to block?</label>
+              <div class="site-row">
+                <input
+                  id="block-site-input"
+                  class="field-input"
+                  type="url"
+                  placeholder="https://youtube.com"
+                  autocomplete="off"
+                />
+                <button id="add-block-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+              </div>
+              <ul id="block-site-list" class="site-list" aria-live="polite"></ul>
             </div>
 
-            <div id="timer-display" class="timer-display" aria-live="polite">25:00</div>
-
-            <div class="timer-controls">
-              <button id="start-timer-btn" class="btn btn-primary" type="button">Start</button>
-              <button id="pause-timer-btn" class="btn btn-secondary" type="button" disabled>Pause</button>
-              <button id="end-timer-btn" class="btn btn-end" type="button" disabled>End</button>
+            <div class="site-group site-group-allow">
+              <label class="field-label" for="allow-site-input">Always Allow</label>
+              <div class="site-row">
+                <input
+                  id="allow-site-input"
+                  class="field-input"
+                  type="url"
+                  placeholder="https://docs.google.com"
+                  autocomplete="off"
+                />
+                <button id="add-allow-site-btn" class="btn btn-secondary btn-small" type="button">Add</button>
+              </div>
+              <ul id="allow-site-list" class="site-list" aria-live="polite"></ul>
             </div>
 
-            <p id="timer-status" class="timer-status" aria-live="polite"></p>
+            <p id="sites-status" class="sites-status" aria-live="polite"></p>
           </div>
         </div>
       </section>
