@@ -10,53 +10,55 @@
     <div class="top-bar" aria-hidden="true"></div>
 
     <main class="page">
-      <header class="hero">
-        <div class="brand">
-          <h1 class="logo">
-            <span class="logo-line">
-              <span class="logo-focus">Focus</span>
-              <svg class="logo-star" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z"
-                />
-              </svg>
-            </span>
-            <span class="logo-buddy-row">
-              <span class="logo-buddy">Buddy</span>
-              <span class="preview" aria-live="polite">
-                <img id="character-preview" src="../assets/sleepbunny.png" alt="Sleep bunny" />
+      <div class="intro-section">
+        <header class="hero">
+          <div class="brand">
+            <h1 class="logo">
+              <span class="logo-line">
+                <span class="logo-focus">Focus</span>
+                <svg class="logo-star" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z"
+                  />
+                </svg>
               </span>
-            </span>
-          </h1>
-          <p class="tagline">A fun way to stay on task!</p>
-        </div>
-      </header>
+              <span class="logo-buddy-row">
+                <span class="logo-buddy">Buddy</span>
+                <span class="preview" aria-live="polite">
+                  <img id="character-preview" src="../assets/sleepbunny.png" alt="Sleep bunny" />
+                </span>
+              </span>
+            </h1>
+            <p class="tagline">A fun way to stay on task!</p>
+          </div>
+        </header>
 
-      <section class="picker" aria-label="Choose a buddy">
-        <p class="picker-copy">Click on a buddy to help keep you on track.</p>
-        <div class="picker-options" role="listbox" aria-label="Available buddies">
-          <button
-            type="button"
-            class="buddy-option"
-            role="option"
-            data-character="cat"
-            aria-selected="false"
-            aria-label="Choose cat buddy"
-          >
-            <img src="../assets/cat.png" alt="" />
-          </button>
-          <button
-            type="button"
-            class="buddy-option is-selected"
-            role="option"
-            data-character="sleepbunny"
-            aria-selected="true"
-            aria-label="Choose sleep bunny buddy"
-          >
-            <img src="../assets/sleepbunny.png" alt="" />
-          </button>
-        </div>
-      </section>
+        <section class="picker" aria-label="Choose a buddy">
+          <p class="picker-copy">Click on a buddy to help keep you on track.</p>
+          <div class="picker-options" role="listbox" aria-label="Available buddies">
+            <button
+              type="button"
+              class="buddy-option"
+              role="option"
+              data-character="cat"
+              aria-selected="false"
+              aria-label="Choose cat buddy"
+            >
+              <img src="../assets/cat.png" alt="" />
+            </button>
+            <button
+              type="button"
+              class="buddy-option is-selected"
+              role="option"
+              data-character="sleepbunny"
+              aria-selected="true"
+              aria-label="Choose sleep bunny buddy"
+            >
+              <img src="../assets/sleepbunny.png" alt="" />
+            </button>
+          </div>
+        </section>
+      </div>
 
       <section class="dashboard" aria-label="Focus dashboard">
         <div class="section-divider" aria-hidden="true">
@@ -132,8 +134,38 @@
           </div>
         </div>
       </section>
+
+      <section class="profile-section" aria-label="Personal stats">
+        <div class="section-divider" aria-hidden="true">
+          <span class="section-divider-ornament" data-side="left">
+            <svg class="ornament-star" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+            <svg class="ornament-moon" viewBox="0 0 24 24">
+              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
+            </svg>
+            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+          </span>
+          <span class="section-divider-label">Your buddy</span>
+          <span class="section-divider-ornament" data-side="right">
+            <svg class="ornament-star ornament-star-sm" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+            <svg class="ornament-moon" viewBox="0 0 24 24">
+              <path d="M16.5 3.2a9.2 9.2 0 1 0 4.3 16.1 8 8 0 1 1-4.3-16.1z" />
+            </svg>
+            <svg class="ornament-star" viewBox="0 0 24 24">
+              <path d="M12 2.5l2.6 6.4 6.9.6-5.2 4.6 1.6 6.7L12 16.8l-6 3.9 1.6-6.7-5.2-4.6 6.9-.6L12 2.5z" />
+            </svg>
+          </span>
+        </div>
+
+        <div id="profile-stats-root" class="profile-stats-root"></div>
+      </section>
     </main>
 
-    <script src="buddy.js"></script>
+    <script type="module" src="buddy.js"></script>
   </body>
 </html>

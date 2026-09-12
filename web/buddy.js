@@ -1,3 +1,7 @@
+import { loadProfileStore } from "./profile/profileStorage.js";
+import { calculateProfileStats } from "./profile/calculateStats.js";
+import { renderProfileStats } from "./profile/renderProfileStats.js";
+
 const CHARACTERS = {
   cat: {
     src: "../assets/cat.png",
@@ -11,6 +15,7 @@ const CHARACTERS = {
 
 const preview = document.getElementById("character-preview");
 const options = Array.from(document.querySelectorAll(".buddy-option"));
+const profileRoot = document.getElementById("profile-stats-root");
 
 const STORAGE_KEY = "focusBuddy.selectedCharacter";
 const BLOCK_SITES_KEY = "focusBuddy.blockSites";
@@ -18,10 +23,19 @@ const ALLOW_SITES_KEY = "focusBuddy.alwaysAllowSites";
 const LEGACY_SITES_KEY = "focusBuddy.allowedSites";
 const TASK_KEY = "focusBuddy.task";
 
+let selectedCharacterId = "sleepbunny";
+
+function refreshProfileStats() {
+  const store = loadProfileStore();
+  const stats = calculateProfileStats(store);
+  renderProfileStats(profileRoot, stats, { characterId: selectedCharacterId });
+}
+
 function applyCharacter(id) {
   const character = CHARACTERS[id];
   if (!character || !preview) return;
 
+  selectedCharacterId = id;
   preview.classList.add("is-switching");
 
   window.setTimeout(() => {
@@ -41,6 +55,8 @@ function applyCharacter(id) {
   } catch {
     // Ignore storage errors in private browsing contexts.
   }
+
+  refreshProfileStats();
 }
 
 options.forEach((button) => {
@@ -228,3 +244,4 @@ allowSiteInput?.addEventListener("keydown", (event) => {
 
 loadTask();
 loadSites();
+refreshProfileStats();
