@@ -14,6 +14,22 @@ import { publishNowPlaying } from "./spotify.js";
 
 mountSiteNav("activity");
 
+function sceneAssetUrl(fileName) {
+  const name = String(fileName || "").replace(/^.*\//, "");
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime?.getURL) {
+      return chrome.runtime.getURL(`assets/couchareasprites/${name}`);
+    }
+  } catch {
+    // Not running as an extension page.
+  }
+  return `/couchareasprites/${name}`;
+}
+
+document.querySelectorAll("[data-scene-asset]").forEach((img) => {
+  img.src = sceneAssetUrl(img.getAttribute("data-scene-asset"));
+});
+
 const lounge = document.getElementById("activity-lounge");
 const banner = document.getElementById("activity-banner");
 const panel = document.getElementById("activity-panel");
