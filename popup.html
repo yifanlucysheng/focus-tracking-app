@@ -5,9 +5,22 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="task-section"></div>
+    <div id="task-section">
+      <label for="task-text">What are you working on?</label>
+      <input type="text" id="task-text" placeholder="e.g. chemistry homework" />
+    </div>
     <div id="timer-section">
       <div id="timer-display">25:00</div>
+      <div class="duration-picker">
+        <label>
+          <input id="duration-minutes" type="number" min="0" max="180" value="25" />
+          min
+        </label>
+        <label>
+          <input id="duration-seconds" type="number" min="0" max="59" value="0" />
+          sec
+        </label>
+      </div>
       <div class="timer-controls">
         <button id="start-task-btn" type="button">Start Focus</button>
         <button id="pause-timer-btn" type="button" disabled>Pause</button>
@@ -15,7 +28,7 @@
       </div>
     </div>
     <div id="character-section">
-      <div id="character-img" class="character-placeholder on-task" aria-label="on-task"></div>
+      <img id="character-img" class="on-task" src="sleepbunny.png" alt="on-task" />
       <div id="summary-section" hidden>
         <p id="summary-text"></p>
       </div>

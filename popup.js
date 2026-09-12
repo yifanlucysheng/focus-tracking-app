@@ -1,47 +1,131 @@
-// Popup script — timer & character sections
-
-const DEFAULT_SECONDS = 25 * 60;
 const LOG_POLL_MS = 10_000;
-
-let remainingSeconds = DEFAULT_SECONDS;
-let countdownId = null;
-let logPollId = null;
-let isPaused = false;
+const DEFAULT_SECONDS = 25 * 60;
 
 const timerDisplay = document.getElementById("timer-display");
 const startBtn = document.getElementById("start-task-btn");
 const pauseBtn = document.getElementById("pause-timer-btn");
 const cancelBtn = document.getElementById("cancel-timer-btn");
+const minutesInput = document.getElementById("duration-minutes");
+const secondsInput = document.getElementById("duration-seconds");
 const characterImg = document.getElementById("character-img");
 const summarySection = document.getElementById("summary-section");
 const summaryText = document.getElementById("summary-text");
 
+let snapshot = null;
+let displayId = null;
+let logPollId = null;
+let summaryShown = false;
+
+function getLinksForTask(taskText) {
+  const text = taskText.toLowerCase();
+
+  const keywordLinks = {
+    chemistry: [
+      "https://www.chemguide.co.uk/",
+      "https://ptable.com/",
+      "https://www.khanacademy.org/science/chemistry",
+    ],
+    essay: [
+      "https://www.citationmachine.net/",
+      "https://docs.google.com/document/create",
+    ],
+  };
+
+  for (const keyword of Object.keys(keywordLinks)) {
+    if (text.includes(keyword)) {
+      return keywordLinks[keyword];
+    }
+  }
+
+  return [
+    "https://www.google.com/search?q=" + encodeURIComponent(taskText),
+  ];
+}
+
+function openTaskTabs() {
+  const taskText = document.getElementById("task-text")?.value?.trim() ?? "";
+  if (!taskText) return;
+
+  chrome.runtime.sendMessage({
+    type: "OPEN_TASK_TABS",
+    links: getLinksForTask(taskText),
+  });
+}
+
 function formatTime(totalSeconds) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
+  const safe = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function updateTimerDisplay() {
-  timerDisplay.textContent = formatTime(remainingSeconds);
+function durationFromInputs() {
+  const minutes = Number(minutesInput?.value ?? 0);
+  const seconds = Number(secondsInput?.value ?? 0);
+  const total = Math.floor(minutes) * 60 + Math.floor(seconds);
+  return Math.max(1, total);
 }
 
-function setControls({ running, paused }) {
+function setDurationInputs(totalSeconds) {
+  const safe = Math.max(1, totalSeconds);
+  if (minutesInput) minutesInput.value = String(Math.floor(safe / 60));
+  if (secondsInput) secondsInput.value = String(safe % 60);
+}
+
+function remainingFromSnapshot() {
+  if (!snapshot) return DEFAULT_SECONDS;
+  if (snapshot.status === "running" && snapshot.endsAt) {
+    return Math.max(0, Math.ceil((snapshot.endsAt - Date.now()) / 1000));
+  }
+  return snapshot.remainingSeconds ?? snapshot.durationSeconds ?? DEFAULT_SECONDS;
+}
+
+function setControls(state) {
+  const running = state.status === "running";
+  const paused = state.status === "paused";
   startBtn.disabled = running || paused;
   pauseBtn.disabled = !running && !paused;
-  cancelBtn.disabled = !running && !paused;
+  cancelBtn.disabled = !running && !paused && state.status !== "finished";
   pauseBtn.textContent = paused ? "Resume" : "Pause";
+  const lockDuration = running || paused;
+  if (minutesInput) minutesInput.disabled = lockDuration;
+  if (secondsInput) secondsInput.disabled = lockDuration;
 }
 
-function clearIntervals() {
-  if (countdownId !== null) {
-    clearInterval(countdownId);
-    countdownId = null;
+function sendTimer(type, extra, callback) {
+  chrome.runtime.sendMessage({ type, ...extra }, (response) => {
+    if (chrome.runtime.lastError) {
+      callback?.(null);
+      return;
+    }
+    callback?.(response);
+  });
+}
+
+function applySnapshot(state) {
+  if (!state) return;
+  snapshot = state;
+  setControls(state);
+  timerDisplay.textContent = formatTime(remainingFromSnapshot());
+
+  if (state.status === "idle" || state.status === "finished") {
+    setDurationInputs(state.durationSeconds || DEFAULT_SECONDS);
   }
-  if (logPollId !== null) {
-    clearInterval(logPollId);
-    logPollId = null;
+
+  if (state.status === "finished" && !summaryShown) {
+    summaryShown = true;
+    showSummary();
   }
+  if (state.status !== "finished") {
+    summaryShown = false;
+    if (state.status !== "running" && state.status !== "paused") {
+      summarySection.hidden = true;
+    }
+  }
+}
+
+function refreshTimer() {
+  sendTimer("GET_TIMER", {}, applySnapshot);
 }
 
 function getEntryStatus(entry) {
@@ -57,10 +141,10 @@ function setCharacterMood(status) {
   characterImg.classList.remove("on-task", "distracted");
   characterImg.classList.add(isOnTask ? "on-task" : "distracted");
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
+  characterImg.alt = isOnTask ? "on-task" : "distracted";
 
-  // Prefer image assets when available; otherwise keep colored placeholder div.
   if (characterImg.tagName === "IMG") {
-    characterImg.src = isOnTask ? "happy.png" : "sad.png";
+    characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
   }
 }
 
@@ -71,7 +155,10 @@ function requestFocusLog(callback) {
         callback(null);
         return;
       }
-      callback(response?.focusLog ?? null);
+      const focusLog = Array.isArray(response)
+        ? response
+        : (response?.focusLog ?? null);
+      callback(focusLog);
     });
   } catch {
     callback(null);
@@ -100,65 +187,38 @@ function showSummary() {
   });
 }
 
-function beginIntervals() {
-  countdownId = setInterval(tick, 1000);
-  logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
-}
-
-function tick() {
-  remainingSeconds -= 1;
-  updateTimerDisplay();
-
-  if (remainingSeconds <= 0) {
-    remainingSeconds = 0;
-    updateTimerDisplay();
-    clearIntervals();
-    isPaused = false;
-    setControls({ running: false, paused: false });
-    showSummary();
-  }
-}
-
-function startTimer() {
-  if (countdownId !== null || isPaused) return;
-
-  remainingSeconds = DEFAULT_SECONDS;
-  updateTimerDisplay();
+function startFocusSession() {
+  openTaskTabs();
   summarySection.hidden = true;
-  isPaused = false;
-  setControls({ running: true, paused: false });
-
-  pollLatestFocusStatus();
-  beginIntervals();
+  summaryShown = false;
+  sendTimer("START_TIMER", { durationSeconds: durationFromInputs() }, (state) => {
+    applySnapshot(state);
+    pollLatestFocusStatus();
+  });
 }
 
 function pauseOrResumeTimer() {
-  if (!isPaused && countdownId === null) return;
-
-  if (isPaused) {
-    isPaused = false;
-    setControls({ running: true, paused: false });
-    pollLatestFocusStatus();
-    beginIntervals();
-    return;
-  }
-
-  isPaused = true;
-  clearIntervals();
-  setControls({ running: false, paused: true });
+  const type = snapshot?.status === "paused" ? "RESUME_TIMER" : "PAUSE_TIMER";
+  sendTimer(type, {}, applySnapshot);
 }
 
-function cancelTimer() {
-  clearIntervals();
-  isPaused = false;
-  remainingSeconds = DEFAULT_SECONDS;
-  updateTimerDisplay();
+function cancelFocusSession() {
   summarySection.hidden = true;
-  setControls({ running: false, paused: false });
+  summaryShown = false;
+  sendTimer("CANCEL_TIMER", {}, applySnapshot);
 }
 
-startBtn?.addEventListener("click", startTimer);
+startBtn?.addEventListener("click", startFocusSession);
 pauseBtn?.addEventListener("click", pauseOrResumeTimer);
-cancelBtn?.addEventListener("click", cancelTimer);
-updateTimerDisplay();
-setControls({ running: false, paused: false });
+cancelBtn?.addEventListener("click", cancelFocusSession);
+
+refreshTimer();
+pollLatestFocusStatus();
+displayId = setInterval(() => {
+  if (snapshot?.status === "running") {
+    const remaining = remainingFromSnapshot();
+    timerDisplay.textContent = formatTime(remaining);
+    if (remaining <= 0) refreshTimer();
+  }
+}, 250);
+logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
