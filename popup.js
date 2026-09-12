@@ -435,7 +435,9 @@ saveSiteBtn?.addEventListener("click", () => {
 });
 
 document.getElementById("open-dashboard-btn")?.addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("web/index.html") });
+  // The website lives in Vite (npm run dev), not inside the extension package.
+  // chrome.runtime.getURL("web/index.html") 404s because dist/ only ships popup modules under web/.
+  chrome.tabs.create({ url: "http://127.0.0.1:5173/" });
 });
 
 function showSessionStats(session) {

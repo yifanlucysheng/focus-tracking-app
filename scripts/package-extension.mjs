@@ -23,6 +23,8 @@ const REQUIRED_FILES = [
   "overlay.js",
   "site-bridge.js",
   "logo.PNG",
+  "fonts/PPMondwest-Regular.otf",
+  "fonts/LXGWMarkerGothic.ttf",
   "moon1.png",
   "moon2.png",
   "moon3.png",
@@ -80,6 +82,8 @@ copyFile("style.css");
 copyFile("overlay.js");
 copyFile("site-bridge.js");
 copyFile("logo.PNG");
+copyFile("assets/fonts/PPMondwest-Regular.otf", "fonts/PPMondwest-Regular.otf");
+copyFile("assets/fonts/LXGWMarkerGothic.ttf", "fonts/LXGWMarkerGothic.ttf");
 // Website assets/ are the source of truth for buddy stage sprites.
 copyFile("assets/moon1.png", "moon1.png");
 copyFile("assets/moon2.png", "moon2.png");
