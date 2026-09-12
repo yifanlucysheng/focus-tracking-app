@@ -342,6 +342,40 @@ async function evaluateActiveTab() {
   }
 }
 
+async function injectOverlay(tabId, animate) {
+  if (tabId == null) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["overlay.js"],
+    });
+    await chrome.tabs.sendMessage(tabId, {
+      type: animate ? "OVERLAY_FALL" : "OVERLAY_SHOW",
+    });
+  } catch {
+    // Cannot inject into chrome://, the Web Store, or discarded tabs.
+  }
+}
+
+async function showOverlayOnAllTabs(animate) {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(tabs.map((tab) => injectOverlay(tab.id, animate)));
+}
+
+async function hideOverlayOnAllTabs() {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (tab.id == null) return;
+      try {
+        await chrome.tabs.sendMessage(tab.id, { type: "OVERLAY_HIDE" });
+      } catch {
+        // Tab has no overlay listener.
+      }
+    })
+  );
+}
+
 async function startLockIn({ taskText, useTimer, durationSeconds }) {
   const text = String(taskText || "").trim();
   await chrome.storage.local.set({
@@ -361,6 +395,7 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
   }
 
   await evaluateActiveTab();
+  await showOverlayOnAllTabs(true);
   return { lockInActive: true, timer };
 }
 
@@ -369,6 +404,7 @@ async function stopLockIn() {
   clearDistractedTimer();
   await chrome.storage.local.set({ [LOCK_IN_KEY]: false });
   await setCharacterMood("on-task");
+  await hideOverlayOnAllTabs();
   const timer = await cancelTimer();
   return { lockInActive: false, timer };
 }
@@ -448,6 +484,12 @@ chrome.tabs.onActivated.addListener(async () => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete") {
+    await loadKeywords();
+    if (lockInActive) {
+      await injectOverlay(tabId, false);
+    }
+  }
   if (changeInfo.status !== "complete" && !changeInfo.url && !changeInfo.title) {
     return;
   }
