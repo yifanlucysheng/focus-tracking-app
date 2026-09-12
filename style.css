@@ -8,6 +8,7 @@ body {
   background: #f7f8fa;
 }
 
+#task-section,
 #timer-section,
 #character-section {
   display: flex;
@@ -17,8 +18,18 @@ body {
   padding: 16px 20px;
 }
 
+#task-section,
 #timer-section {
   border-bottom: 1px solid #e2e5ea;
+}
+
+#task-text {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 0.95rem;
 }
 
 #timer-display {
