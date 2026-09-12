@@ -48,6 +48,7 @@ let logPollId = null;
 let summaryShown = false;
 let lockInActive = false;
 let taskEditing = false;
+let selectedCharacterId = "sleepbunny";
 
 function formatTime(totalSeconds) {
   const safe = Math.max(0, totalSeconds);
@@ -145,6 +146,8 @@ function applyBuddyVisual(visual) {
   const mood = visual.mood === "distracted" ? "distracted" : "on-task";
   const isOnTask = mood !== "distracted";
   const characterId = visual.characterId === "cat" ? "cat" : "sleepbunny";
+  selectedCharacterId = characterId;
+  setLockInUi(lockInActive);
   characterImg.classList.remove("on-task", "distracted");
   characterImg.classList.toggle("on-task", isOnTask);
   characterImg.classList.toggle("distracted", !isOnTask);
@@ -209,12 +212,21 @@ function showSummary() {
   });
 }
 
+function buddyClickName() {
+  return selectedCharacterId === "cat" ? "cat" : "bunny";
+}
+
 function setLockInUi(active) {
   lockInActive = Boolean(active);
   lockInBtn.setAttribute("aria-pressed", String(lockInActive));
+  const who = buddyClickName();
   lockInHint.textContent = lockInActive
-    ? "click to unactivate lock-in mode"
-    : "click to activate lock-in mode";
+    ? `click ${who} to unactivate`
+    : `click ${who}`;
+  lockInBtn?.setAttribute(
+    "aria-label",
+    lockInActive ? `Click ${who} to turn off lock-in` : `Click ${who} to lock in`
+  );
   setTaskLocked(lockInActive && !taskEditing);
 }
 
@@ -308,8 +320,10 @@ popupTabButtons.forEach((button) => {
   });
 });
 
-chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText", POPUP_TAB_KEY]).then((result) => {
+chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText", POPUP_TAB_KEY, "focusBuddy.selectedCharacter"]).then((result) => {
   applyStoredMood(result.characterMood);
+  selectedCharacterId =
+    result["focusBuddy.selectedCharacter"] === "cat" ? "cat" : "sleepbunny";
   setLockInUi(result.lockInActive);
   if (typeof result.taskText === "string" && taskTextInput) {
     taskTextInput.value = result.taskText;
@@ -327,6 +341,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   if (changes.lockInActive) {
     setLockInUi(changes.lockInActive.newValue);
+  }
+  if (changes["focusBuddy.selectedCharacter"]) {
+    selectedCharacterId =
+      changes["focusBuddy.selectedCharacter"].newValue === "cat"
+        ? "cat"
+        : "sleepbunny";
+    setLockInUi(lockInActive);
   }
 });
 
