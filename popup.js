@@ -402,6 +402,15 @@ endTimerBtn?.addEventListener("click", () => {
 
 killBunnyBtn?.addEventListener("click", () => {
   hideEndTimerModal();
+  const duration = snapshot?.durationSeconds || DEFAULT_SECONDS;
+  applySnapshot({
+    durationSeconds: duration,
+    remainingSeconds: duration,
+    endsAt: null,
+    status: "idle",
+  });
+  setLockInUi(false);
+  setCharacterMood("on-task");
   sendMessage("END_TIMER", {}, (response) => {
     const timer = response?.timer ?? response;
     if (timer) applySnapshot(timer);

@@ -63,17 +63,16 @@ async function finishTimer(state) {
     endsAt: null,
     status: "idle",
   });
-  if (lockInActive) {
-    await stopLockIn();
+  const stored = await chrome.storage.local.get(LOCK_IN_KEY);
+  if (lockInActive || stored[LOCK_IN_KEY]) {
+    void stopLockIn();
   }
   return timer;
 }
 
 async function endTimer() {
-  const current = await readTimer();
-  if (current.status !== "running" && current.status !== "paused") {
-    return { timer: current, lockInActive };
-  }
+  const stored = await chrome.storage.local.get(TIMER_KEY);
+  const current = { ...defaultTimerState(), ...(stored[TIMER_KEY] || {}) };
   const timer = await finishTimer(current);
   return { timer, lockInActive: false };
 }
@@ -589,9 +588,7 @@ async function injectOverlay(tabId, animate) {
       target: { tabId },
       files: ["overlay.js"],
     });
-    await chrome.tabs.sendMessage(tabId, {
-      type: animate ? "OVERLAY_FALL" : "OVERLAY_SHOW",
-    });
+    pingTab(tabId, { type: animate ? "OVERLAY_FALL" : "OVERLAY_SHOW" });
   } catch {
     // Cannot inject into chrome://, the Web Store, or discarded tabs.
   }
@@ -602,18 +599,20 @@ async function showOverlayOnAllTabs(animate) {
   await Promise.all(tabs.map((tab) => injectOverlay(tab.id, animate)));
 }
 
+function pingTab(tabId, message) {
+  if (tabId == null) return;
+  try {
+    chrome.tabs.sendMessage(tabId, message, () => {
+      void chrome.runtime.lastError;
+    });
+  } catch {
+    // Tab has no overlay listener.
+  }
+}
+
 async function hideOverlayOnAllTabs() {
   const tabs = await chrome.tabs.query({});
-  await Promise.all(
-    tabs.map(async (tab) => {
-      if (tab.id == null) return;
-      try {
-        await chrome.tabs.sendMessage(tab.id, { type: "OVERLAY_HIDE" });
-      } catch {
-        // Tab has no overlay listener.
-      }
-    })
-  );
+  tabs.forEach((tab) => pingTab(tab.id, { type: "OVERLAY_HIDE" }));
 }
 
 async function startLockIn({ taskText }) {
