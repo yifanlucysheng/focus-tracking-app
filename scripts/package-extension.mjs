@@ -42,7 +42,8 @@ const REQUIRED_FILES = [
   "cat5.png",
   "cat6.png",
   "cat7.png",
-  "secrets.local.js",
+  "secrets.public.js",
+  "web/index.html",
 ];
 
 function rimraf(dir) {
@@ -106,6 +107,14 @@ copyFile("assets/cat5.png", "cat5.png");
 copyFile("assets/cat6.png", "cat6.png");
 copyFile("assets/cat7.png", "cat7.png");
 fs.cpSync(path.join(root, "web"), path.join(outDir, "web"), { recursive: true });
+if (fs.existsSync(path.join(root, "couchareasprites"))) {
+  fs.cpSync(
+    path.join(root, "couchareasprites"),
+    path.join(outDir, "couchareasprites"),
+    { recursive: true }
+  );
+}
+copyFile("secrets.public.js");
 
 // Popup ES modules import these (Friends activity + cloud sync).
 const popupWebModules = [
@@ -123,18 +132,11 @@ for (const rel of popupWebModules) {
   REQUIRED_FILES.push(rel);
 }
 
-// secrets: prefer real local secrets; fall back to example so the SW can load
+// Optional local overrides (Gemini, etc.). Do not copy the placeholder example —
+// it would overwrite secrets.public.js Firebase keys.
 const secretsSrc = path.join(root, "secrets.local.js");
-const secretsExample = path.join(root, "secrets.local.example.js");
 if (fs.existsSync(secretsSrc)) {
   copyFile("secrets.local.js");
-} else if (fs.existsSync(secretsExample)) {
-  fs.copyFileSync(secretsExample, path.join(outDir, "secrets.local.js"));
-  console.warn(
-    "[package-extension] secrets.local.js missing — copied secrets.local.example.js into dist/. Replace with real keys before sign-in."
-  );
-} else {
-  throw new Error("Neither secrets.local.js nor secrets.local.example.js found.");
 }
 
 // 3) Verify every required path exists (what Chrome will fetch)
@@ -150,16 +152,15 @@ const sw = fs.readFileSync(path.join(outDir, "service-worker.js"), "utf8");
 const importScripts = [...sw.matchAll(/importScripts\(([^)]+)\)/g)].map((m) =>
   m[1].trim()
 );
-const badImports = importScripts.filter((args) => {
-  return !/secrets\.local\.js/.test(args);
-});
+const allowedSecrets = /secrets\.(public|local)\.js/;
+const badImports = importScripts.filter((args) => !allowedSecrets.test(args));
 if (badImports.length) {
   throw new Error(
-    `service-worker.js has unexpected importScripts (must only load secrets.local.js): ${badImports.join("; ")}`
+    `service-worker.js has unexpected importScripts (must only load secrets): ${badImports.join("; ")}`
   );
 }
-if (!/importScripts\(\s*["']secrets\.local\.js["']\s*\)/.test(sw)) {
-  throw new Error("service-worker.js does not importScripts secrets.local.js");
+if (!/importScripts\(\s*["']secrets\.public\.js["']\s*\)/.test(sw)) {
+  throw new Error("service-worker.js does not importScripts secrets.public.js");
 }
 
 // 5) Verify popup script tags resolve
@@ -176,3 +177,11 @@ for (const f of REQUIRED_FILES) {
   const size = fs.statSync(path.join(outDir, f)).size;
   console.log(`  OK  ${f} (${size} bytes)`);
 }
+
+const zipPath = path.join(root, "focus-buddy-extension.zip");
+if (fs.existsSync(zipPath)) fs.rmSync(zipPath);
+execSync(`zip -r "${zipPath}" . -x "*.DS_Store"`, {
+  cwd: outDir,
+  stdio: "inherit",
+});
+console.log("Shareable zip:", zipPath);

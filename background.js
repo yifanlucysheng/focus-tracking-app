@@ -416,12 +416,17 @@ function startLiveHealthTicker() {
 }
 
 try {
-  importScripts("secrets.local.js");
+  importScripts("secrets.public.js");
 } catch (err) {
   console.warn(
-    "[Focus Buddy] Could not load secrets.local.js from the extension root:",
+    "[Focus Buddy] Could not load secrets.public.js:",
     err?.message || err
   );
+}
+try {
+  importScripts("secrets.local.js");
+} catch {
+  // Optional Gemini / override keys.
 }
 
 // Auth (FocusBuddyAuth) is inlined into service-worker.js by
@@ -480,7 +485,7 @@ const AUTH_READY = (async () => {
     return {
       configured: false,
       configMessage:
-        "Connect FocusBuddy: open secrets.local.js and paste the same Firebase web keys as web/firebase-config.js, then reload the extension.",
+        "Connect FocusBuddy: Firebase keys are missing. Reload the unpacked extension from this repo (secrets.public.js must be present).",
       signedIn: false,
       user: null,
       profile: null,

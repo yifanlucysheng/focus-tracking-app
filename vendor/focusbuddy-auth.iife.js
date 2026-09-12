@@ -31319,7 +31319,7 @@ This typically indicates that your device does not have a healthy Internet conne
   }
   function calculateCharacterHealth(sessions) {
     const completed = sessions.filter((s2) => s2.completed);
-    if (completed.length === 0) return 95;
+    if (completed.length === 0) return 100;
     const last = completed[completed.length - 1];
     if (typeof last.characterHealth === "number" && Number.isFinite(last.characterHealth)) {
       return Math.max(0, Math.min(100, Math.floor(last.characterHealth)));
@@ -31330,7 +31330,7 @@ This typically indicates that your device does not have a healthy Internet conne
     if (typeof last.onTaskPercent === "number") {
       return characterHealthFromOnTaskRatio(last.onTaskPercent / 100);
     }
-    return 95;
+    return 100;
   }
   function characterHealthLabel(health) {
     if (health <= 0) return "Resting";

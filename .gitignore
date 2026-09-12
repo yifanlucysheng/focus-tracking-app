@@ -2,8 +2,9 @@ secrets.local.js
 .DS_Store
 node_modules/
 .vite/
-dist-web/
 dist/
+dist-web/
+focus-buddy-extension.zip
 .env
 .env.local
 .env.*.local
