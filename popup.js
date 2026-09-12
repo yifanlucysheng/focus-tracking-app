@@ -1,83 +1,127 @@
-// Popup script — task input, timer & character sections
-
-const DEFAULT_SECONDS = 25 * 60;
 const LOG_POLL_MS = 10_000;
+const DEFAULT_SECONDS = 25 * 60;
+const TIMER_OPEN_KEY = "timerDropdownOpen";
 
-let remainingSeconds = DEFAULT_SECONDS;
-let countdownId = null;
-let logPollId = null;
-let isPaused = false;
-
+const timerDropdown = document.getElementById("timer-dropdown");
 const timerDisplay = document.getElementById("timer-display");
-const startBtn = document.getElementById("start-task-btn");
-const pauseBtn = document.getElementById("pause-timer-btn");
-const cancelBtn = document.getElementById("cancel-timer-btn");
+const hoursInput = document.getElementById("duration-hours");
+const minutesInput = document.getElementById("duration-minutes");
+const secondsInput = document.getElementById("duration-seconds");
 const characterImg = document.getElementById("character-img");
+const lockInBtn = document.getElementById("lock-in-btn");
+const lockInHint = document.getElementById("lock-in-hint");
 const summarySection = document.getElementById("summary-section");
 const summaryText = document.getElementById("summary-text");
+const taskTextInput = document.getElementById("task-text");
+const changeTaskBtn = document.getElementById("change-task-btn");
 
-function getLinksForTask(taskText) {
-  const text = taskText.toLowerCase();
-
-  const keywordLinks = {
-    chemistry: [
-      "https://www.chemguide.co.uk/",
-      "https://ptable.com/",
-      "https://www.khanacademy.org/science/chemistry",
-    ],
-    essay: [
-      "https://www.citationmachine.net/",
-      "https://docs.google.com/document/create",
-    ],
-  };
-
-  for (const keyword of Object.keys(keywordLinks)) {
-    if (text.includes(keyword)) {
-      return keywordLinks[keyword];
-    }
-  }
-
-  return [
-    "https://www.google.com/search?q=" + encodeURIComponent(taskText),
-  ];
-}
-
-function openTaskTabs() {
-  const taskText = document.getElementById("task-text")?.value?.trim() ?? "";
-  if (!taskText) return;
-
-  chrome.runtime.sendMessage({
-    type: "OPEN_TASK_TABS",
-    links: getLinksForTask(taskText),
-  });
-}
+let snapshot = null;
+let displayId = null;
+let logPollId = null;
+let summaryShown = false;
+let lockInActive = false;
+let taskEditing = false;
 
 function formatTime(totalSeconds) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
+  const safe = Math.max(0, totalSeconds);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function updateTimerDisplay() {
-  timerDisplay.textContent = formatTime(remainingSeconds);
+function clampInt(value, min, max, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(n)));
 }
 
-function setControls({ running, paused }) {
-  startBtn.disabled = running || paused;
-  pauseBtn.disabled = !running && !paused;
-  cancelBtn.disabled = !running && !paused;
-  pauseBtn.textContent = paused ? "Resume" : "Pause";
+function durationFromInputs() {
+  const hours = clampInt(hoursInput?.value, 0, 23, 0);
+  const minutes = clampInt(minutesInput?.value, 0, 59, 0);
+  const seconds = clampInt(secondsInput?.value, 0, 59, 0);
+  const total = hours * 3600 + minutes * 60 + seconds;
+  return Math.max(1, total);
 }
 
-function clearIntervals() {
-  if (countdownId !== null) {
-    clearInterval(countdownId);
-    countdownId = null;
+function setDurationInputs(totalSeconds) {
+  const safe = Math.max(1, totalSeconds);
+  if (hoursInput) hoursInput.value = String(Math.floor(safe / 3600));
+  if (minutesInput) minutesInput.value = String(Math.floor((safe % 3600) / 60));
+  if (secondsInput) secondsInput.value = String(safe % 60);
+}
+
+function isEditingDuration() {
+  const active = document.activeElement;
+  return active === hoursInput || active === minutesInput || active === secondsInput;
+}
+
+function syncDisplayFromInputsIfIdle() {
+  if (snapshot?.status === "running" || snapshot?.status === "paused") return;
+  timerDisplay.textContent = formatTime(durationFromInputs());
+}
+
+function remainingFromSnapshot() {
+  if (!snapshot) return DEFAULT_SECONDS;
+  if (snapshot.status === "running" && snapshot.endsAt) {
+    return Math.max(0, Math.ceil((snapshot.endsAt - Date.now()) / 1000));
   }
-  if (logPollId !== null) {
-    clearInterval(logPollId);
-    logPollId = null;
+  return snapshot.remainingSeconds ?? snapshot.durationSeconds ?? DEFAULT_SECONDS;
+}
+
+function setDurationLock(locked) {
+  if (hoursInput) hoursInput.disabled = locked;
+  if (minutesInput) minutesInput.disabled = locked;
+  if (secondsInput) secondsInput.disabled = locked;
+}
+
+function sendMessage(type, extra, callback) {
+  chrome.runtime.sendMessage({ type, ...extra }, (response) => {
+    if (chrome.runtime.lastError) {
+      callback?.(null);
+      return;
+    }
+    callback?.(response);
+  });
+}
+
+function applySnapshot(state) {
+  if (!state) return;
+  snapshot = state;
+  const timerBusy = state.status === "running" || state.status === "paused";
+  setDurationLock(timerBusy);
+
+  // Always reflect the session duration in the picker (including while running).
+  // Skipping this when busy left the HTML defaults (25 min) after reopening the popup.
+  if (!isEditingDuration()) {
+    setDurationInputs(state.durationSeconds || DEFAULT_SECONDS);
   }
+
+  if (timerBusy) {
+    timerDisplay.textContent = formatTime(remainingFromSnapshot());
+  } else if (!isEditingDuration()) {
+    timerDisplay.textContent = formatTime(
+      state.durationSeconds || durationFromInputs() || DEFAULT_SECONDS
+    );
+  }
+
+  if (state.status === "finished" && !summaryShown) {
+    summaryShown = true;
+    showSummary();
+  }
+  if (state.status !== "finished") {
+    summaryShown = false;
+    if (state.status !== "running" && state.status !== "paused") {
+      summarySection.hidden = true;
+    }
+  }
+}
+
+function refreshTimer() {
+  sendMessage("GET_TIMER", {}, applySnapshot);
 }
 
 function getEntryStatus(entry) {
@@ -89,14 +133,12 @@ function getEntryStatus(entry) {
 }
 
 function setCharacterMood(status) {
-  const isOnTask = status === "on-task";
+  const isOnTask = status !== "distracted";
   characterImg.classList.remove("on-task", "distracted");
   characterImg.classList.add(isOnTask ? "on-task" : "distracted");
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
-
-  if (characterImg.tagName === "IMG") {
-    characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
-  }
+  characterImg.alt = isOnTask ? "on-task" : "distracted";
+  characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
 }
 
 function requestFocusLog(callback) {
@@ -116,14 +158,15 @@ function requestFocusLog(callback) {
   }
 }
 
+function applyStoredMood(status) {
+  if (status === "on-task" || status === "distracted") {
+    setCharacterMood(status);
+  }
+}
+
 function pollLatestFocusStatus() {
-  requestFocusLog((focusLog) => {
-    if (!Array.isArray(focusLog) || focusLog.length === 0) return;
-    const latest = focusLog[focusLog.length - 1];
-    const status = getEntryStatus(latest);
-    if (status === "on-task" || status === "distracted") {
-      setCharacterMood(status);
-    }
+  chrome.storage.local.get("characterMood").then((result) => {
+    applyStoredMood(result.characterMood);
   });
 }
 
@@ -138,66 +181,145 @@ function showSummary() {
   });
 }
 
-function beginIntervals() {
-  countdownId = setInterval(tick, 1000);
-  logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
+function setLockInUi(active) {
+  lockInActive = Boolean(active);
+  lockInBtn.setAttribute("aria-pressed", String(lockInActive));
+  lockInHint.textContent = lockInActive
+    ? "click to unactivate lock-in mode"
+    : "click to activate lock-in mode";
+  setTaskLocked(lockInActive && !taskEditing);
 }
 
-function tick() {
-  remainingSeconds -= 1;
-  updateTimerDisplay();
-
-  if (remainingSeconds <= 0) {
-    remainingSeconds = 0;
-    updateTimerDisplay();
-    clearIntervals();
-    isPaused = false;
-    setControls({ running: false, paused: false });
-    showSummary();
+function setTaskLocked(locked) {
+  if (!taskTextInput) return;
+  taskTextInput.disabled = Boolean(locked);
+  if (changeTaskBtn) {
+    changeTaskBtn.hidden = !lockInActive;
+    changeTaskBtn.classList.toggle("editing", Boolean(lockInActive && taskEditing));
   }
 }
 
-function startTimer() {
-  if (countdownId !== null || isPaused) return;
-
-  remainingSeconds = DEFAULT_SECONDS;
-  updateTimerDisplay();
-  summarySection.hidden = true;
-  isPaused = false;
-  setControls({ running: true, paused: false });
-
-  openTaskTabs();
-  pollLatestFocusStatus();
-  beginIntervals();
+function beginChangeTask() {
+  if (!lockInActive) return;
+  taskEditing = true;
+  setTaskLocked(false);
+  taskTextInput?.focus();
+  taskTextInput?.select();
 }
 
-function pauseOrResumeTimer() {
-  if (!isPaused && countdownId === null) return;
-
-  if (isPaused) {
-    isPaused = false;
-    setControls({ running: true, paused: false });
-    pollLatestFocusStatus();
-    beginIntervals();
+function commitTaskChange() {
+  if (!lockInActive || !taskEditing) {
+    setTaskLocked(lockInActive);
     return;
   }
-
-  isPaused = true;
-  clearIntervals();
-  setControls({ running: false, paused: true });
+  taskEditing = false;
+  const taskText = taskTextInput?.value?.trim() ?? "";
+  sendMessage("UPDATE_TASK", { taskText }, () => {
+    setTaskLocked(true);
+    pollLatestFocusStatus();
+  });
 }
 
-function cancelTimer() {
-  clearIntervals();
-  isPaused = false;
-  remainingSeconds = DEFAULT_SECONDS;
-  updateTimerDisplay();
+function activateLockIn() {
   summarySection.hidden = true;
-  setControls({ running: false, paused: false });
+  summaryShown = false;
+  taskEditing = false;
+  // Duration inputs keep their values even when the <details> panel is collapsed.
+  // Previously useTimer required the dropdown to stay open, so lock-in often
+  // started with no timer after setting a duration and closing the panel.
+  const durationSeconds = durationFromInputs();
+  sendMessage(
+    "START_LOCK_IN",
+    {
+      taskText: taskTextInput?.value?.trim() ?? "",
+      useTimer: true,
+      durationSeconds,
+    },
+    (response) => {
+      if (!response) return;
+      setLockInUi(true);
+      if (response.timer) applySnapshot(response.timer);
+      pollLatestFocusStatus();
+    }
+  );
 }
 
-startBtn?.addEventListener("click", startTimer);
-pauseBtn?.addEventListener("click", pauseOrResumeTimer);
-cancelBtn?.addEventListener("click", cancelTimer);
-updateTimerDisplay();
-setControls({ running: false, paused: false });
+function deactivateLockIn() {
+  summarySection.hidden = true;
+  summaryShown = false;
+  taskEditing = false;
+  sendMessage("STOP_LOCK_IN", {}, (response) => {
+    setLockInUi(false);
+    setCharacterMood("on-task");
+    if (response?.timer) applySnapshot(response.timer);
+  });
+}
+
+function toggleLockIn() {
+  if (lockInActive) {
+    deactivateLockIn();
+    return;
+  }
+  activateLockIn();
+}
+
+chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText"]).then((result) => {
+  applyStoredMood(result.characterMood);
+  setLockInUi(result.lockInActive);
+  if (typeof result.taskText === "string" && taskTextInput) {
+    taskTextInput.value = result.taskText;
+  }
+  if (timerDropdown) {
+    timerDropdown.open = Boolean(result[TIMER_OPEN_KEY]);
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.characterMood) {
+    applyStoredMood(changes.characterMood.newValue);
+  }
+  if (changes.lockInActive) {
+    setLockInUi(changes.lockInActive.newValue);
+  }
+});
+
+timerDropdown?.addEventListener("toggle", () => {
+  chrome.storage.local.set({ [TIMER_OPEN_KEY]: Boolean(timerDropdown.open) });
+});
+
+for (const input of [hoursInput, minutesInput, secondsInput]) {
+  input?.addEventListener("input", () => {
+    syncDisplayFromInputsIfIdle();
+  });
+  input?.addEventListener("change", () => {
+    // Normalize out-of-range / empty values, then reflect on the big display.
+    if (input === hoursInput) input.value = String(clampInt(input.value, 0, 23, 0));
+    if (input === minutesInput) input.value = String(clampInt(input.value, 0, 59, 0));
+    if (input === secondsInput) input.value = String(clampInt(input.value, 0, 59, 0));
+    if (!isEditingDuration() || document.activeElement === input) {
+      syncDisplayFromInputsIfIdle();
+    }
+  });
+}
+
+lockInBtn?.addEventListener("click", toggleLockIn);
+changeTaskBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  if (taskEditing) {
+    commitTaskChange();
+    return;
+  }
+  beginChangeTask();
+});
+
+refreshTimer();
+pollLatestFocusStatus();
+displayId = setInterval(() => {
+  if (snapshot?.status === "running") {
+    const remaining = remainingFromSnapshot();
+    timerDisplay.textContent = formatTime(remaining);
+    if (remaining <= 0) refreshTimer();
+  }
+}, 250);
+logPollId = setInterval(pollLatestFocusStatus, LOG_POLL_MS);
