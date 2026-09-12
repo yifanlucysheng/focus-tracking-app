@@ -1,32 +1,40 @@
 /**
  * Buddy health visuals.
  *
- * Cat Buddy (7 levels). Session starts at 95 (cat.png).
- * 95 → cat.png … 0 → cat7.png
+ * Cat Buddy (7 levels). Session starts at 100 (cat.png).
+ * 100 → cat.png … 0 → cat7.png
  *
- * Moon Buddy (5 levels, evenly split 0–100). Session starts at 95 → moon1.
- * 80–100 → moon1.png  (stage 1, healthiest / yaybunny)
- * 60–79  → moon2.png  (stage 2 / sleepbunny)
- * 40–59  → moon3.png  (stage 3)
- * 20–39  → moon4.png  (stage 4)
- * 0–19   → moon5.png  (stage 5, lowest / gravestone)
+ * Moon Buddy (5 levels from moonbuddysprites). Session starts at 100 → stage 1.
+ * 80–100 → stage1 / yaybunny
+ * 60–79  → stage2 / sleepbunny
+ * 40–59  → stage3
+ * 20–39  → stage4
+ * 0–19   → stage5 / gravestone
  *
  * Progression during lock-in:
- * - 1s distracted → −1 health (floor at 0)
- * - 2s on-task → +1 health (cap at 95)
+ * - 1 minute on-task → next happier stage
+ * - 1 minute distracted → next sadder stage
  */
 
 export const CHARACTER_HEALTH_STAGES = 7;
 export const MOON_HEALTH_STAGES = 5;
 
 /** Highest → lowest health values for each cat stage. */
-export const HEALTH_STAGE_VALUES = [95, 80, 65, 50, 35, 20, 0];
+export const HEALTH_STAGE_VALUES = [100, 80, 65, 50, 35, 20, 0];
 
 /** Even bands for Moon Buddy (stage 1 = highest). */
 export const MOON_HEALTH_THRESHOLDS = [80, 60, 40, 20, 0];
 
+const MOON_STAGE_FILES = [
+  "../moonbuddysprites/stage1moon/yaybunny.png",
+  "../moonbuddysprites/stage2moon/sleepbunny.png",
+  "../moonbuddysprites/stage3moon/stage3.png",
+  "../moonbuddysprites/stage4moon/stage4bunny.png",
+  "../moonbuddysprites/stage5moon/gravestone.png",
+];
+
 /** Health at the start of every lock-in session. */
-export const SESSION_START_HEALTH = 95;
+export const SESSION_START_HEALTH = 100;
 
 /**
  * @param {number} health 0–100
@@ -83,7 +91,7 @@ export function catBuddySrcForHealth(health) {
  * @returns {string}
  */
 export function moonBuddySrcForHealth(health) {
-  return `../moon${moonBuddyStage(health)}.png`;
+  return MOON_STAGE_FILES[moonBuddyStage(health) - 1];
 }
 
 /**

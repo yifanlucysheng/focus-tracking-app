@@ -1,7 +1,8 @@
 // Copy to firebase-config.js and paste values from the Firebase console
 // (Project settings → Your apps → Web app).
 // Spotify: create an app at https://developer.spotify.com/dashboard
-// Redirect URI: https://<YOUR_EXTENSION_ID>.chromiumapp.org/
+// Redirect URI (same for every teammate once manifest.json includes "key"):
+// https://ckfpkmcmabbkafmnjcjfjjnbflpfjefh.chromiumapp.org/
 
 export const firebaseConfig = {
   apiKey: "YOUR_FIREBASE_API_KEY",

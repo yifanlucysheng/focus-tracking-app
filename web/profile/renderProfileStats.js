@@ -41,7 +41,7 @@ export function renderProfileStats(root, stats, options = {}) {
   );
   const buddy = buddyVisualForHealth(
     characterId,
-    showHealth ? healthPct : 95
+    showHealth ? healthPct : 100
   );
   const xpPct = Math.round(Math.min(1, Math.max(0, stats.xpProgress)) * 100);
 

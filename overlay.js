@@ -6,7 +6,7 @@
   }
 
   // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
-  const OVERLAY_VERSION = 12;
+  const OVERLAY_VERSION = 15;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
@@ -33,7 +33,7 @@
     const parsed = Number(health);
     const h = Number.isFinite(parsed)
       ? Math.max(0, Math.min(100, parsed))
-      : 95;
+      : 100;
     if (h >= 95) return "cat.png";
     if (h >= 80) return "cat2.png";
     if (h >= 65) return "cat3.png";
@@ -42,6 +42,14 @@
     if (h >= 20) return "cat6.png";
     return "cat7.png";
   }
+
+  const MOON_STAGE_FILES = [
+    "moonbuddysprites/stage1moon/yaybunny.png",
+    "moonbuddysprites/stage2moon/sleepbunny.png",
+    "moonbuddysprites/stage3moon/stage3.png",
+    "moonbuddysprites/stage4moon/stage4bunny.png",
+    "moonbuddysprites/stage5moon/gravestone.png",
+  ];
 
   /**
    * Moon Buddy stages 1–5 (even 20-point bands). Matches website.
@@ -52,12 +60,12 @@
     const parsed = Number(health);
     const h = Number.isFinite(parsed)
       ? Math.max(0, Math.min(100, parsed))
-      : 95;
-    if (h >= 80) return "moon1.png";
-    if (h >= 60) return "moon2.png";
-    if (h >= 40) return "moon3.png";
-    if (h >= 20) return "moon4.png";
-    return "moon5.png";
+      : 100;
+    if (h >= 80) return MOON_STAGE_FILES[0];
+    if (h >= 60) return MOON_STAGE_FILES[1];
+    if (h >= 40) return MOON_STAGE_FILES[2];
+    if (h >= 20) return MOON_STAGE_FILES[3];
+    return MOON_STAGE_FILES[4];
   }
 
   /**
@@ -68,20 +76,24 @@
    */
   function isStageBuddyFile(file, characterId) {
     if (typeof file !== "string" || !file) return false;
-    const name = file.split("/").pop() || file;
+    const normalized = file.replace(/^\.\.\//, "");
+    const name = normalized.split("/").pop() || file;
     if (characterId === "cat") {
       return name === "cat.png" || /^cat[2-7]\.png$/i.test(name);
     }
-    return /^moon[1-5]\.png$/i.test(name);
+    return (
+      /^moon[1-5]\.png$/i.test(name) ||
+      /moonbuddysprites\/stage[1-5]moon\//i.test(normalized)
+    );
   }
 
   function resolveBuddyFile(payload) {
     const characterId =
       payload?.characterId === "cat" ? "cat" : "sleepbunny";
     const health = Number(payload?.characterHealth);
-    const safeHealth = Number.isFinite(health) ? health : 95;
+    const safeHealth = Number.isFinite(health) ? health : 100;
     if (isStageBuddyFile(payload?.buddyFile, characterId)) {
-      return String(payload.buddyFile).split("/").pop();
+      return String(payload.buddyFile).replace(/^\.\.\//, "");
     }
     if (characterId === "cat") return catFileForHealth(safeHealth);
     return moonFileForHealth(safeHealth);
@@ -110,9 +122,10 @@
         img {
           position: fixed;
           left: 20px;
-          top: 0;
-          width: 96px;
-          height: 96px;
+          top: auto;
+          bottom: 20px;
+          width: 125px;
+          height: 125px;
           object-fit: contain;
           z-index: 2147483647;
           pointer-events: none;
@@ -125,20 +138,22 @@
           animation: none;
         }
         img.fall {
+          top: 0;
+          bottom: auto;
           animation: focus-buddy-fall 1.8s cubic-bezier(0.15, 0.05, 0.25, 1) forwards;
         }
         @keyframes focus-buddy-fall {
           0% {
-            transform: translateY(-120px);
+            transform: translateY(-156px);
           }
           82% {
-            transform: translateY(calc(100vh - 124px));
+            transform: translateY(calc(100vh - 161px));
           }
           91% {
-            transform: translateY(calc(100vh - 148px));
+            transform: translateY(calc(100vh - 192px));
           }
           100% {
-            transform: translateY(calc(100vh - 116px));
+            transform: translateY(calc(100vh - 151px));
           }
         }
       </style>
@@ -152,7 +167,7 @@
   function notifyPageHealth(payload) {
     const health = Number(payload?.characterHealth);
     const live = Boolean(payload?.liveSessionActive);
-    const safeHealth = Number.isFinite(health) ? health : 95;
+    const safeHealth = Number.isFinite(health) ? health : 100;
     const file = resolveBuddyFile(payload);
     try {
       window.postMessage(
@@ -190,7 +205,7 @@
     if (payload?.buddyFile || payload?.characterId) {
       applyBuddyVisual(payload);
     } else {
-      img.src = extensionUrl(moonFileForHealth(95));
+      img.src = extensionUrl(moonFileForHealth(100));
       try {
         chrome.runtime.sendMessage({ type: "GET_BUDDY_VISUAL" }, (response) => {
           if (chrome.runtime.lastError || !response) return;
@@ -201,21 +216,29 @@
       }
     }
 
-    img.classList.remove("fall", "rest");
-    if (animate) {
-      void img.offsetWidth;
-      img.classList.add("fall");
-      img.addEventListener(
-        "animationend",
-        () => {
-          img.classList.remove("fall");
-          img.classList.add("rest");
-        },
-        { once: true }
-      );
+    if (img.classList.contains("fall")) return;
+    if (img.classList.contains("rest")) return;
+
+    const shouldFall =
+      animate &&
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible";
+
+    if (!shouldFall) {
+      img.classList.add("rest");
       return;
     }
-    img.classList.add("rest");
+
+    void img.offsetWidth;
+    img.classList.add("fall");
+    img.addEventListener(
+      "animationend",
+      () => {
+        img.classList.remove("fall");
+        img.classList.add("rest");
+      },
+      { once: true }
+    );
   }
 
   function hideOverlay() {
@@ -273,7 +296,7 @@
           if (chrome.runtime.lastError || !response) return;
           const raw = Number(response.characterHealth);
           const live = Boolean(response.liveSessionActive);
-          const health = Number.isFinite(raw) ? raw : 95;
+          const health = Number.isFinite(raw) ? raw : 100;
           window.postMessage(
             {
               source: "focus-buddy-extension",

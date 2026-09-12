@@ -126,11 +126,15 @@ function getEntryStatus(entry) {
 
 function isStageBuddyFile(file, characterId) {
   if (typeof file !== "string" || !file) return false;
-  const name = file.split("/").pop() || file;
+  const normalized = file.replace(/^\.\.\//, "");
+  const name = normalized.split("/").pop() || file;
   if (characterId === "cat") {
     return name === "cat.png" || /^cat[2-7]\.png$/i.test(name);
   }
-  return /^moon[1-5]\.png$/i.test(name);
+  return (
+    /^moon[1-5]\.png$/i.test(name) ||
+    /moonbuddysprites\/stage[1-5]moon\//i.test(normalized)
+  );
 }
 
 function applyBuddyVisual(visual) {
@@ -144,7 +148,7 @@ function applyBuddyVisual(visual) {
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
   characterImg.alt = isOnTask ? "on-task" : "distracted";
   if (isStageBuddyFile(visual.buddyFile, characterId)) {
-    characterImg.src = String(visual.buddyFile).split("/").pop();
+    characterImg.src = String(visual.buddyFile).replace(/^\.\.\//, "");
   }
 }
 

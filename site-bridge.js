@@ -74,7 +74,7 @@
         {
           source: "focus-buddy-extension",
           type: "CHARACTER_HEALTH",
-          characterHealth: Number.isFinite(health) ? health : 95,
+          characterHealth: Number.isFinite(health) ? health : 100,
           liveSessionActive: Boolean(payload?.liveSessionActive),
           characterId:
             payload?.characterId === "cat" ? "cat" : "sleepbunny",

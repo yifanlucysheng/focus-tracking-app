@@ -485,9 +485,9 @@ export async function clearNowPlaying() {
 }
 
 export async function saveSpotifyTokens(tokens) {
+  await loadSdk();
   const uid = currentUid();
   if (!uid) throw new Error("Sign in first.");
-  await loadSdk();
   const { doc, setDoc } = firestoreFns;
   await setDoc(doc(db, "users", uid, "private", "spotify"), {
     accessToken: tokens.accessToken,
@@ -499,18 +499,18 @@ export async function saveSpotifyTokens(tokens) {
 }
 
 export async function loadSpotifyTokens() {
+  await loadSdk();
   const uid = currentUid();
   if (!uid) return null;
-  await loadSdk();
   const { doc, getDoc } = firestoreFns;
   const snap = await getDoc(doc(db, "users", uid, "private", "spotify"));
   return snap.exists() ? snap.data() : null;
 }
 
 export async function clearSpotifyTokens() {
+  await loadSdk();
   const uid = currentUid();
   if (!uid) return;
-  await loadSdk();
   const { doc, deleteDoc } = firestoreFns;
   await deleteDoc(doc(db, "users", uid, "private", "spotify"));
   await clearNowPlaying();

@@ -1,4 +1,4 @@
-import { spotifyClientId } from "./firebase-config.js";
+import { spotifyClientId, spotifyRedirectUri } from "./firebase-config.js";
 import { clearNowPlaying, loadSpotifyTokens, saveNowPlaying, saveSpotifyTokens } from "./cloud.js";
 
 const SCOPES = "user-read-currently-playing user-read-playback-state";
@@ -33,7 +33,29 @@ function redirectUri() {
   if (globalThis.chrome?.identity?.getRedirectURL) {
     return chrome.identity.getRedirectURL();
   }
-  return `${location.origin}/web/spotify-callback.html`;
+  return spotifyRedirectUri;
+}
+
+async function persistTokens(tokens) {
+  if (globalThis.chrome?.storage?.local) {
+    await chrome.storage.local.set({ spotifyTokens: tokens });
+  }
+  try {
+    await saveSpotifyTokens(tokens);
+  } catch {
+    // Signed-out or rules blocked cloud save — local tokens still work in this browser.
+  }
+}
+
+function spotifyAuthError(raw) {
+  const text = String(raw || "");
+  if (/redirect.?uri|invalid_client/i.test(text)) {
+    return `Spotify rejected this app’s Redirect URI. In developer.spotify.com/dashboard → your app → Redirect URIs, add exactly: ${redirectUri()}`;
+  }
+  if (/not registered|user not|developer mode|whitelist/i.test(text)) {
+    return "This Spotify app is still in development mode. Add each teammate’s Spotify email under Users and Access, or submit the app for extended quota so anyone can connect.";
+  }
+  return text || "Could not connect Spotify.";
 }
 
 export async function connectSpotify() {
@@ -47,10 +69,11 @@ export async function connectSpotify() {
   const verifier = randomString(40);
   const challenge = base64Url(await sha256(verifier));
   const state = randomString(8);
+  const redirect = redirectUri();
   const params = new URLSearchParams({
     client_id: spotifyClientId,
     response_type: "code",
-    redirect_uri: redirectUri(),
+    redirect_uri: redirect,
     scope: SCOPES,
     code_challenge_method: "S256",
     code_challenge: challenge,
@@ -61,7 +84,13 @@ export async function connectSpotify() {
   const responseUrl = await new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow({ url, interactive: true }, (redirected) => {
       if (chrome.runtime.lastError || !redirected) {
-        reject(new Error(chrome.runtime.lastError?.message || "Spotify sign-in was cancelled."));
+        reject(
+          new Error(
+            spotifyAuthError(
+              chrome.runtime.lastError?.message || "Spotify sign-in was cancelled."
+            )
+          )
+        );
         return;
       }
       resolve(redirected);
@@ -70,7 +99,7 @@ export async function connectSpotify() {
 
   const redirected = new URL(responseUrl);
   const error = redirected.searchParams.get("error");
-  if (error) throw new Error(error);
+  if (error) throw new Error(spotifyAuthError(error));
   const code = redirected.searchParams.get("code");
   if (!code) throw new Error("Spotify did not return an auth code.");
 
@@ -78,7 +107,7 @@ export async function connectSpotify() {
     client_id: spotifyClientId,
     grant_type: "authorization_code",
     code,
-    redirect_uri: redirectUri(),
+    redirect_uri: redirect,
     code_verifier: verifier,
   });
   const tokenRes = await fetch(TOKEN_URL, {
@@ -86,7 +115,10 @@ export async function connectSpotify() {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  if (!tokenRes.ok) throw new Error("Could not finish Spotify login.");
+  if (!tokenRes.ok) {
+    const detail = await tokenRes.text().catch(() => "");
+    throw new Error(spotifyAuthError(detail || "Could not finish Spotify login."));
+  }
   const json = await tokenRes.json();
   const tokens = {
     accessToken: json.access_token,
@@ -94,10 +126,7 @@ export async function connectSpotify() {
     expiresAt: Date.now() + (json.expires_in || 3600) * 1000,
     tokenType: json.token_type || "Bearer",
   };
-  await saveSpotifyTokens(tokens);
-  if (globalThis.chrome?.storage?.local) {
-    await chrome.storage.local.set({ spotifyTokens: tokens });
-  }
+  await persistTokens(tokens);
   return tokens;
 }
 
@@ -121,10 +150,7 @@ async function refreshTokens(current) {
     expiresAt: Date.now() + (json.expires_in || 3600) * 1000,
     tokenType: json.token_type || current.tokenType || "Bearer",
   };
-  await saveSpotifyTokens(tokens);
-  if (globalThis.chrome?.storage?.local) {
-    await chrome.storage.local.set({ spotifyTokens: tokens });
-  }
+  await persistTokens(tokens);
   return tokens;
 }
 

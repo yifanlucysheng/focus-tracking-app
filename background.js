@@ -65,13 +65,20 @@ const CHARACTER_HEALTH_KEY = "characterHealth";
 const SELECTED_CHARACTER_KEY = "focusBuddy.selectedCharacter";
 const HEALTH_PROGRESS_KEY = "healthProgressState";
 const HEALTH_ALARM = "focus-health-tick";
-/** Session starts at 95 HP (cat.png). */
-const SESSION_START_HEALTH = 95;
-const HEALTH_STAGE_VALUES = [95, 80, 65, 50, 35, 20, 0];
-/** 1 second distracted → −1 health. */
-const OFF_TASK_STEP_MS = 1_000;
-/** 2 seconds on-task → +1 health. */
-const ON_TASK_STEP_MS = 2_000;
+/** Session starts at 100 HP (healthiest stage). */
+const SESSION_START_HEALTH = 100;
+const HEALTH_STAGE_VALUES = [100, 80, 65, 50, 35, 20, 0];
+/** Moon Buddy stages 1–5 (healthiest → least). */
+const MOON_STAGE_HEALTH = [100, 75, 50, 25, 0];
+const MOON_STAGE_FILES = [
+  "moonbuddysprites/stage1moon/yaybunny.png",
+  "moonbuddysprites/stage2moon/sleepbunny.png",
+  "moonbuddysprites/stage3moon/stage3.png",
+  "moonbuddysprites/stage4moon/stage4bunny.png",
+  "moonbuddysprites/stage5moon/gravestone.png",
+];
+/** One visual stage per full minute on-task or distracted. */
+const STAGE_STEP_MS = 60_000;
 
 let taskKeywords = [];
 let lockInActive = false;
@@ -83,14 +90,14 @@ let lastLiveHealthSyncAt = 0;
 let liveHealthSyncTimer = null;
 let liveHealthTickTimer = null;
 let healthResetRetryTimer = null;
-/** @type {number} live companion HP 0–95 */
+/** @type {number} live companion HP 0–100 */
 let sessionCharacterHealth = SESSION_START_HEALTH;
 /** @type {number} 0 = healthiest … 6 = lowest (derived from HP for stage art) */
 let sessionHealthStage = 0;
 /** @type {number} */
 let lockInStartedAt = 0;
 /**
- * Tracks accrued on-task / off-task time for HP changes.
+ * Tracks accrued on-task / off-task time for stage changes.
  * @type {{
  *   status: 'on-task'|'distracted'|null,
  *   tabId: number|null,
@@ -118,6 +125,15 @@ function stageFromHealth(health) {
   return 6;
 }
 
+function moonStageFromHealth(health) {
+  const h = Math.max(0, Math.min(100, Number(health) || 0));
+  if (h >= 80) return 0;
+  if (h >= 60) return 1;
+  if (h >= 40) return 2;
+  if (h >= 20) return 3;
+  return 4;
+}
+
 /**
  * @param {number} health
  * @returns {string}
@@ -129,20 +145,12 @@ function catFileForHealth(health) {
 }
 
 /**
- * Moon Buddy stages 1–5 (even 20-point bands). Stage 1 = healthiest.
+ * Moon Buddy stages 1–5 from moonbuddysprites (1 = healthiest).
  * @param {number} health
  * @returns {string}
  */
 function moonFileForHealth(health) {
-  const parsed = Number(health);
-  const h = Number.isFinite(parsed)
-    ? Math.max(0, Math.min(100, parsed))
-    : SESSION_START_HEALTH;
-  if (h >= 80) return "moon1.png";
-  if (h >= 60) return "moon2.png";
-  if (h >= 40) return "moon3.png";
-  if (h >= 20) return "moon4.png";
-  return "moon5.png";
+  return MOON_STAGE_FILES[moonStageFromHealth(health)];
 }
 
 function buddyFileForCharacter(characterId, health) {
@@ -317,7 +325,7 @@ function noteFocusStatusForHealth(status, tabId) {
 }
 
 /**
- * Advance HP: −1 per 1s distracted, +1 per 2s on-task.
+ * Advance one visual stage per full minute on-task (happier) or distracted (sadder).
  * Uses wall-clock so a sleeping service worker still applies missed time on wake.
  */
 async function tickSessionHealth() {
@@ -335,24 +343,34 @@ async function tickSessionHealth() {
   }
 
   healthProgress.accruedMs += dt;
+  const steps = Math.floor(healthProgress.accruedMs / STAGE_STEP_MS);
+  if (steps < 1) {
+    void persistHealthProgress();
+    return;
+  }
+  healthProgress.accruedMs -= steps * STAGE_STEP_MS;
+
+  const selected = await chrome.storage.local.get(SELECTED_CHARACTER_KEY);
+  const characterId =
+    selected[SELECTED_CHARACTER_KEY] === "cat" ? "cat" : "sleepbunny";
 
   let next = sessionCharacterHealth;
   if (healthProgress.status === "on-task") {
-    const steps = Math.floor(healthProgress.accruedMs / ON_TASK_STEP_MS);
-    if (steps < 1) {
-      void persistHealthProgress();
-      return;
+    if (characterId === "cat") {
+      const stage = Math.max(0, stageFromHealth(sessionCharacterHealth) - steps);
+      next = healthFromStage(stage);
+    } else {
+      const stage = Math.max(0, moonStageFromHealth(sessionCharacterHealth) - steps);
+      next = MOON_STAGE_HEALTH[stage];
     }
-    healthProgress.accruedMs -= steps * ON_TASK_STEP_MS;
-    next = Math.min(SESSION_START_HEALTH, sessionCharacterHealth + steps);
   } else if (healthProgress.status === "distracted") {
-    const steps = Math.floor(healthProgress.accruedMs / OFF_TASK_STEP_MS);
-    if (steps < 1) {
-      void persistHealthProgress();
-      return;
+    if (characterId === "cat") {
+      const stage = Math.min(6, stageFromHealth(sessionCharacterHealth) + steps);
+      next = healthFromStage(stage);
+    } else {
+      const stage = Math.min(4, moonStageFromHealth(sessionCharacterHealth) + steps);
+      next = MOON_STAGE_HEALTH[stage];
     }
-    healthProgress.accruedMs -= steps * OFF_TASK_STEP_MS;
-    next = Math.max(0, sessionCharacterHealth - steps);
   } else {
     void persistHealthProgress();
     return;
@@ -782,7 +800,7 @@ async function broadcastCharacterHealthToTabs(health, liveSessionActive) {
 }
 
 /**
- * Every new focus session starts at 95 health (cat.png) and refreshes the website.
+ * Every new focus session starts at 100 health (cat.png / moon stage 1) and refreshes the website.
  * Retries cloud sync briefly if auth is still warming up.
  */
 async function resetCharacterHealthForNewSession() {
@@ -1490,36 +1508,33 @@ async function evaluateActiveTab() {
   }
 }
 
+async function overlayPayload(animate) {
+  const visual = await resolveBuddyVisual();
+  return {
+    type: animate ? "OVERLAY_FALL" : "OVERLAY_SHOW",
+    mood: visual.mood,
+    buddyFile: visual.buddyFile,
+    characterId: visual.characterId,
+    characterHealth: visual.characterHealth,
+    liveSessionActive: visual.liveSessionActive,
+  };
+}
+
 async function injectOverlay(tabId, animate) {
   if (tabId == null) return;
   try {
-    const visual = await resolveBuddyVisual();
-    // Clear any older overlay copy (including ones that crashed on chrome.storage)
-    // so the latest storage-free overlay.js always installs.
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => {
-        try {
-          window.__focusBuddyOverlayVersion = 0;
-          window.__focusBuddyOverlayInit = false;
-          document.getElementById("focus-buddy-overlay-host")?.remove();
-        } catch {
-          // Page may deny access in rare cases.
-        }
-      },
-    });
+    const payload = await overlayPayload(animate);
+    try {
+      await chrome.tabs.sendMessage(tabId, payload);
+      return;
+    } catch {
+      // Content script not ready yet — install overlay.js, then show at rest or fall once.
+    }
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["overlay.js"],
     });
-    await chrome.tabs.sendMessage(tabId, {
-      type: animate ? "OVERLAY_FALL" : "OVERLAY_SHOW",
-      mood: visual.mood,
-      buddyFile: visual.buddyFile,
-      characterId: visual.characterId,
-      characterHealth: visual.characterHealth,
-      liveSessionActive: visual.liveSessionActive,
-    });
+    await chrome.tabs.sendMessage(tabId, payload);
   } catch {
     // Cannot inject into chrome://, the Web Store, or discarded tabs.
   }
@@ -1527,7 +1542,16 @@ async function injectOverlay(tabId, animate) {
 
 async function showOverlayOnAllTabs(animate) {
   const tabs = await chrome.tabs.query({});
-  await Promise.all(tabs.map((tab) => injectOverlay(tab.id, animate)));
+  const active = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
+  const activeId = active[0]?.id;
+  await Promise.all(
+    tabs.map((tab) =>
+      injectOverlay(tab.id, Boolean(animate && tab.id === activeId))
+    )
+  );
 }
 
 async function hideOverlayOnAllTabs() {
@@ -1565,7 +1589,7 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
     timer = await startTimer(durationSeconds);
   }
 
-  // Reset to 95 health (cat.png); cloud sync is non-blocking (see reset helper).
+  // Reset to 100 health; cloud sync is non-blocking (see reset helper).
   await resetCharacterHealthForNewSession();
   startLiveHealthTicker();
 
@@ -1790,8 +1814,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-chrome.tabs.onActivated.addListener(async () => {
+chrome.tabs.onActivated.addListener(async (info) => {
   await evaluateActiveTab();
+  if (lockInActive) {
+    await injectOverlay(info.tabId, false);
+  }
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {

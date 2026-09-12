@@ -9,3 +9,6 @@ export const firebaseConfig = {
 };
 
 export const spotifyClientId = "a16abf99841c4daeb492b55adf3a1158";
+/** Must match chrome.identity.getRedirectURL() with the pinned manifest key. */
+export const spotifyRedirectUri =
+  "https://ckfpkmcmabbkafmnjcjfjjnbflpfjefh.chromiumapp.org/";

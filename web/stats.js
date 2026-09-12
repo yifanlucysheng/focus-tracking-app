@@ -88,13 +88,15 @@ function resolveDisplayHealth(incoming) {
   }
 
   if (isLive) {
-    if (inStaleZeroGrace && (!Number.isFinite(cloudHealth) || cloudHealth <= 0)) {
+    if (!Number.isFinite(cloudHealth) || cloudHealth <= 0) {
+      if (Number.isFinite(extHealth) && extHealth > 0) return extHealth;
       return SESSION_START_HEALTH;
     }
-    return Number.isFinite(cloudHealth) ? cloudHealth : SESSION_START_HEALTH;
+    return cloudHealth;
   }
 
-  return Number.isFinite(cloudHealth) ? cloudHealth : 0;
+  if (Number.isFinite(cloudHealth) && cloudHealth > 0) return cloudHealth;
+  return SESSION_START_HEALTH;
 }
 
 function paintStats(publicStats) {

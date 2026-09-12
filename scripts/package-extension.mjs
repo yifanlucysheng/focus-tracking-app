@@ -30,6 +30,11 @@ const REQUIRED_FILES = [
   "moon3.png",
   "moon4.png",
   "moon5.png",
+  "moonbuddysprites/stage1moon/yaybunny.png",
+  "moonbuddysprites/stage2moon/sleepbunny.png",
+  "moonbuddysprites/stage3moon/stage3.png",
+  "moonbuddysprites/stage4moon/stage4bunny.png",
+  "moonbuddysprites/stage5moon/gravestone.png",
   "cat.png",
   "cat2.png",
   "cat3.png",
@@ -90,6 +95,9 @@ copyFile("assets/moon2.png", "moon2.png");
 copyFile("assets/moon3.png", "moon3.png");
 copyFile("assets/moon4.png", "moon4.png");
 copyFile("assets/moon5.png", "moon5.png");
+fs.cpSync(path.join(root, "moonbuddysprites"), path.join(outDir, "moonbuddysprites"), {
+  recursive: true,
+});
 copyFile("assets/cat.png", "cat.png");
 copyFile("assets/cat2.png", "cat2.png");
 copyFile("assets/cat3.png", "cat3.png");

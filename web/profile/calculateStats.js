@@ -131,7 +131,7 @@ export function characterHealthFromOnTaskRatio(onTaskRatio) {
  */
 export function calculateCharacterHealth(sessions) {
   const completed = sessions.filter((s) => s.completed);
-  if (completed.length === 0) return 95;
+  if (completed.length === 0) return 100;
 
   const last = completed[completed.length - 1];
   if (typeof last.characterHealth === "number" && Number.isFinite(last.characterHealth)) {
@@ -143,7 +143,7 @@ export function calculateCharacterHealth(sessions) {
   if (typeof last.onTaskPercent === "number") {
     return characterHealthFromOnTaskRatio(last.onTaskPercent / 100);
   }
-  return 95;
+  return 100;
 }
 
 /**
