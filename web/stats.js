@@ -8,6 +8,7 @@ import {
 import { loadProfileStoreAsync } from "./profile/profileStorage.js";
 import { renderProfileStats } from "./profile/renderProfileStats.js";
 import { SESSION_START_HEALTH } from "./profile/characterHealthVisual.js";
+import { applyXp } from "./profile/xp.js";
 import {
   isCloudConfigured,
   listenAuth,
@@ -134,6 +135,15 @@ function paintStats(publicStats) {
     stats.xp = cachedPublicStats.xp;
     stats.xpIntoLevel = cachedPublicStats.xp;
   }
+  // Recompute next-level threshold from the displayed level (cloud overwrites
+  // level/xp without bringing xpForNextLevel, which left a stale "/100").
+  const progress = applyXp(stats.level, stats.xpIntoLevel, 0);
+  stats.level = progress.level;
+  stats.xp = progress.xp;
+  stats.xpIntoLevel = progress.xp;
+  stats.xpForNextLevel = progress.xpForNextLevel;
+  stats.xpProgress =
+    progress.xpForNextLevel === 0 ? 0 : progress.xp / progress.xpForNextLevel;
   if (cachedPublicStats.streakDays != null) {
     stats.focusStreakDays = cachedPublicStats.streakDays;
   }

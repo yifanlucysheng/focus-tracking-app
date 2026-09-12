@@ -1,6 +1,7 @@
 /** @typedef {import('./profileTypes.js').ProfileStatsView} ProfileStatsView */
 
 import { buddyVisualForHealth } from "./characterHealthVisual.js";
+import { applyXp, xpToNextLevel } from "./xp.js";
 
 /**
  * @param {string} value
@@ -43,7 +44,15 @@ export function renderProfileStats(root, stats, options = {}) {
     characterId,
     showHealth ? healthPct : 100
   );
-  const xpPct = Math.round(Math.min(1, Math.max(0, stats.xpProgress)) * 100);
+  // Derive threshold from the displayed level so cloud level/xp overrides
+  // cannot leave a stale "/100" from level 1.
+  const progress = applyXp(stats.level, stats.xpIntoLevel ?? stats.xp, 0);
+  const level = progress.level;
+  const xpIntoLevel = progress.xp;
+  const xpForNextLevel = progress.xpForNextLevel || xpToNextLevel(level);
+  const xpPct = Math.round(
+    Math.min(1, Math.max(0, xpIntoLevel / Math.max(1, xpForNextLevel))) * 100
+  );
 
   root.innerHTML = `
     <div class="profile-layout">
@@ -101,20 +110,20 @@ export function renderProfileStats(root, stats, options = {}) {
       <div class="profile-level-card profile-card-tone-a">
         <div class="profile-level-head">
           <p class="profile-kicker">${whose} Focus Level</p>
-          <p class="profile-level-value">Level ${stats.level}</p>
+          <p class="profile-level-value">Level ${level}</p>
         </div>
         <div
           class="profile-bar"
           role="progressbar"
           aria-valuemin="0"
-          aria-valuemax="${stats.xpForNextLevel}"
-          aria-valuenow="${stats.xpIntoLevel}"
+          aria-valuemax="${xpForNextLevel}"
+          aria-valuenow="${xpIntoLevel}"
           aria-label="XP progress to next level"
         >
           <div class="profile-bar-fill profile-bar-xp" style="width: ${xpPct}%"></div>
         </div>
         <p class="profile-level-sub">
-          ${stats.xpIntoLevel} / ${stats.xpForNextLevel} XP
+          ${xpIntoLevel} / ${xpForNextLevel} XP
         </p>
       </div>
 
