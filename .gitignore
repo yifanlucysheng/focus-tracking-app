@@ -1,6 +1,7 @@
 secrets.local.js
 .DS_Store
 node_modules/
+.vite/
 dist-web/
 dist/
 .env
