@@ -221,11 +221,13 @@ function setLockInUi(active) {
   lockInBtn.setAttribute("aria-pressed", String(lockInActive));
   const who = buddyClickName();
   lockInHint.textContent = lockInActive
-    ? `click ${who} to unactivate`
-    : `click ${who}`;
+    ? `click ${who} to unactivate lock in session`
+    : `click ${who} to activate lock in session`;
   lockInBtn?.setAttribute(
     "aria-label",
-    lockInActive ? `Click ${who} to turn off lock-in` : `Click ${who} to lock in`
+    lockInActive
+      ? `Click ${who} to unactivate lock in session`
+      : `Click ${who} to activate lock in session`
   );
   setTaskLocked(lockInActive && !taskEditing);
 }
