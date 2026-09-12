@@ -1333,6 +1333,226 @@ body:has(.intro-section) .intro-section {
   line-height: 1.4;
 }
 
+/* Activity lounge: sky + floor + couches from couchareasprites */
+.activity-page {
+  background: #6d7eb8;
+}
+
+.activity-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.activity-scene-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+}
+
+.activity-page .top-bar,
+.activity-page .activity-header {
+  position: relative;
+  z-index: 2;
+}
+
+.activity-page .subpage-bar {
+  background-color: transparent;
+  background-image: none;
+}
+
+.activity-banner {
+  position: relative;
+  z-index: 2;
+  margin: 0 24px 8px;
+}
+
+.activity-lounge {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.activity-lounge-empty {
+  position: absolute;
+  left: 50%;
+  bottom: 28%;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: 420px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: rgba(247, 239, 216, 0.88);
+  color: var(--focus);
+  text-align: center;
+  pointer-events: none;
+}
+
+.activity-seat {
+  position: absolute;
+  pointer-events: auto;
+  width: min(168px, 28vw);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transform: translateX(-20%);
+  filter: drop-shadow(0 10px 16px rgba(42, 24, 107, 0.28));
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.activity-seat img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.activity-seat:hover,
+.activity-seat:focus-visible {
+  transform: translateX(-20%) translateY(-8px) scale(1.06);
+  outline: none;
+}
+
+.activity-seat.is-selected {
+  transform: translateX(-20%) translateY(-10px) scale(1.08);
+  filter: drop-shadow(0 0 0 3px rgba(247, 239, 216, 0.95))
+    drop-shadow(0 12px 18px rgba(42, 24, 107, 0.35));
+}
+
+.activity-panel {
+  position: fixed;
+  z-index: 3;
+  top: 92px;
+  right: 20px;
+  bottom: 20px;
+  width: min(380px, calc(100vw - 28px));
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 16px;
+  border-radius: 24px;
+  background: rgba(247, 239, 216, 0.94);
+  border: 1px solid rgba(100, 108, 166, 0.22);
+  box-shadow: 0 16px 40px rgba(42, 24, 107, 0.18);
+  overflow: hidden;
+}
+
+.activity-panel[hidden] {
+  display: none !important;
+}
+
+.activity-panel-close {
+  align-self: flex-end;
+  margin-bottom: 4px;
+  border: none;
+  background: transparent;
+  color: var(--buddy);
+  font: inherit;
+  cursor: pointer;
+}
+
+.activity-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.activity-panel-avatar {
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  align-self: center;
+}
+
+.activity-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1;
+  margin-top: 8px;
+}
+
+.activity-chat-thread {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.activity-chat-empty {
+  color: var(--buddy);
+  font-size: 14px;
+}
+
+.activity-chat-bubble {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.35;
+  word-wrap: break-word;
+}
+
+.activity-chat-bubble.is-mine {
+  align-self: flex-end;
+  background: var(--focus);
+  color: #fff;
+}
+
+.activity-chat-bubble.is-theirs {
+  align-self: flex-start;
+  background: rgba(100, 108, 166, 0.18);
+  color: var(--focus);
+}
+
+.activity-chat-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.activity-chat-form .field-input {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+}
+
+@media (max-width: 720px) {
+  .activity-panel {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    height: min(58vh, 460px);
+  }
+
+  .activity-seat {
+    width: min(120px, 34vw);
+  }
+}
+
+.activity-page .friends-section {
+  padding-bottom: 160px;
+}
+
 @media (max-width: 640px) {
   .activity-card {
     grid-template-columns: 64px 1fr;

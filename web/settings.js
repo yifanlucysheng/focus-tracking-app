@@ -29,6 +29,7 @@ const statusInput = document.getElementById("status-input");
 const shareStats = document.getElementById("share-stats-toggle");
 const shareListening = document.getElementById("share-listening-toggle");
 const spotifyStatus = document.getElementById("spotify-status");
+const spotifyRedirectHint = document.getElementById("spotify-redirect-hint");
 
 function setBanner(text) {
   if (banner) banner.textContent = text || "";
@@ -44,6 +45,14 @@ async function refreshSpotifyLabel() {
   const tokens = await loadSpotifyTokens().catch(() => null);
   if (spotifyStatus) {
     spotifyStatus.textContent = tokens?.accessToken ? "Spotify connected" : "Not connected";
+  }
+  if (spotifyRedirectHint) {
+    if (globalThis.chrome?.identity?.getRedirectURL) {
+      spotifyRedirectHint.textContent = `Redirect URI to add in Spotify Dashboard: ${chrome.identity.getRedirectURL()}`;
+    } else {
+      spotifyRedirectHint.textContent =
+        "Open this Settings page from the Focus Buddy popup (Open dashboard). Connect Spotify does not work in a normal browser tab.";
+    }
   }
 }
 
@@ -153,6 +162,7 @@ document.getElementById("spotify-disconnect-btn")?.addEventListener("click", asy
 const bootNote = await bootCloudSync();
 initFoldersPanel();
 initSiteLists();
+await refreshSpotifyLabel();
 if (!isCloudConfigured()) {
   setBanner(bootNote);
 } else {

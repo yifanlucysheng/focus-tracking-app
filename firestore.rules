@@ -80,6 +80,38 @@ service cloud.firestore {
       allow delete: if isOwner(uid) || request.auth.uid == otherUid;
     }
 
+    match /chats/{chatId} {
+      function chatMembers() {
+        return resource.data.members;
+      }
+
+      function otherChatMember(members) {
+        return members[0] == request.auth.uid ? members[1] : members[0];
+      }
+
+      allow read: if signedIn() && request.auth.uid in chatMembers();
+      allow create: if signedIn()
+        && request.resource.data.members.size() == 2
+        && request.auth.uid in request.resource.data.members
+        && isMutualFriend(otherChatMember(request.resource.data.members));
+      allow update: if signedIn()
+        && request.auth.uid in chatMembers()
+        && request.resource.data.members == resource.data.members;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+        allow create: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 400;
+        allow update, delete: if false;
+      }
+    }
+
     match /friendRequests/{uid}/incoming/{fromUid} {
       allow read: if isOwner(uid) || request.auth.uid == fromUid;
       allow create: if signedIn() && request.auth.uid == fromUid && uid != fromUid;
