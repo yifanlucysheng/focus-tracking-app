@@ -1,54 +1,56 @@
-/* Popup styles — timer & character layout */
+/* Popup styles — lock-in row, optional timer, character */
 
 body {
   margin: 0;
-  width: 350px;
+  width: 380px;
   font-family: "Segoe UI", system-ui, sans-serif;
   color: #1a1a1a;
   background: #f7f8fa;
 }
 
-#task-section,
-#timer-section,
-#character-section {
+#timer-dropdown {
+  border-bottom: 1px solid #e2e5ea;
+  padding: 8px 16px 10px;
+}
+
+#timer-dropdown summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#timer-dropdown summary::-webkit-details-marker {
+  display: none;
+}
+
+#timer-dropdown summary::after {
+  content: "▸";
+  font-size: 0.85rem;
+  color: #667085;
+}
+
+#timer-dropdown[open] summary::after {
+  content: "▾";
+}
+
+#timer-section {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 16px 20px;
-}
-
-#task-section {
-  align-items: stretch;
-  border-bottom: 1px solid #e2e5ea;
-}
-
-#task-section label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 8px;
-  text-align: left;
-}
-
-#task-text {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid #d5d9e0;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 0.95rem;
-}
-
-#timer-section {
-  border-bottom: 1px solid #e2e5ea;
+  padding: 12px 0 4px;
 }
 
 #timer-display {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .duration-picker {
@@ -56,7 +58,6 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  margin-bottom: 12px;
 }
 
 .duration-picker label {
@@ -77,80 +78,111 @@ body {
   text-align: center;
 }
 
-.timer-controls {
+#lock-in-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
 }
 
-.timer-controls button {
+#lock-in-btn {
   appearance: none;
   border: none;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 0.95rem;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#lock-in-btn:focus-visible {
+  outline: 2px solid #2f6fed;
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+.lock-in-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+#lock-in-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: #344054;
+}
+
+.task-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
   font-weight: 600;
+}
+
+.task-inline label {
+  flex-shrink: 0;
+}
+
+#task-text {
+  min-width: 0;
+  flex: 1;
+  box-sizing: border-box;
+  border: 1px solid #d5d9e0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+#task-text:disabled {
+  background: #eef0f4;
+  color: #1a1a1a;
+  cursor: default;
+}
+
+#change-task-btn {
+  appearance: none;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  background: #e8ebf0;
   cursor: pointer;
 }
 
-#start-task-btn {
+#change-task-btn:hover {
+  background: #d8dde6;
+}
+
+#change-task-btn.editing {
   color: #fff;
   background: #2f6fed;
 }
 
-#start-task-btn:hover:not(:disabled) {
+#change-task-btn.editing:hover {
   background: #1f5bd6;
 }
 
-#pause-timer-btn {
-  color: #1a1a1a;
-  background: #e8ebf0;
+#change-task-btn[hidden] {
+  display: none;
 }
 
-#pause-timer-btn:hover:not(:disabled) {
-  background: #d8dde6;
-}
-
-#cancel-timer-btn {
-  color: #fff;
-  background: #c44b4b;
-}
-
-#cancel-timer-btn:hover:not(:disabled) {
-  background: #a83c3c;
-}
-
-.timer-controls button:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-#character-img.character-placeholder {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  margin: 8px 0 12px;
-  transition: background-color 0.25s ease;
-}
-
-#character-img.character-placeholder.on-task {
-  background: #3cb371; /* happy placeholder */
-}
-
-#character-img.character-placeholder.distracted {
-  background: #e85d5d; /* sad placeholder */
-}
-
-#character-img:not(.character-placeholder) {
-  width: 96px;
-  height: 96px;
+#character-img {
+  width: 88px;
+  height: 88px;
   object-fit: contain;
-  margin: 8px 0 12px;
+  display: block;
 }
 
 #summary-section {
-  width: 100%;
+  margin: 0 16px 14px;
   padding: 12px 14px;
   border-radius: 10px;
   background: #fff;

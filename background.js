@@ -1,10 +1,16 @@
-const FOCUS_TABS_KEY = "focusTabs";
+const KEYWORDS_KEY = "taskKeywords";
 const FOCUS_LOG_KEY = "focusLog";
+const MOOD_KEY = "characterMood";
+const LOCK_IN_KEY = "lockInActive";
+const TASK_TEXT_KEY = "taskText";
 const TIMER_KEY = "timerState";
 const TIMER_ALARM = "focus-timer-end";
 const DEFAULT_SECONDS = 25 * 60;
+const DISTRACTED_DELAY_MS = 10_000;
 
-let focusTabs = new Set();
+let taskKeywords = [];
+let lockInActive = false;
+let distractedTimerId = null;
 
 function defaultTimerState() {
   return {
@@ -129,13 +135,26 @@ async function cancelTimer() {
   });
 }
 
-async function loadFocusTabs() {
-  const result = await chrome.storage.local.get(FOCUS_TABS_KEY);
-  focusTabs = new Set(result[FOCUS_TABS_KEY] || []);
+function extractKeywords(taskText) {
+  return [...new Set(
+    String(taskText)
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 2)
+  )];
 }
 
-async function saveFocusTabs() {
-  await chrome.storage.local.set({ [FOCUS_TABS_KEY]: [...focusTabs] });
+async function loadKeywords() {
+  const result = await chrome.storage.local.get([KEYWORDS_KEY, LOCK_IN_KEY]);
+  taskKeywords = Array.isArray(result[KEYWORDS_KEY])
+    ? result[KEYWORDS_KEY]
+    : [];
+  lockInActive = Boolean(result[LOCK_IN_KEY]);
+}
+
+async function saveKeywords(keywords) {
+  taskKeywords = keywords;
+  await chrome.storage.local.set({ [KEYWORDS_KEY]: keywords });
 }
 
 async function appendFocusLog(status) {
@@ -147,7 +166,109 @@ async function appendFocusLog(status) {
   await chrome.storage.local.set({ [FOCUS_LOG_KEY]: focusLog });
 }
 
-loadFocusTabs();
+async function setCharacterMood(status) {
+  await chrome.storage.local.set({ [MOOD_KEY]: status });
+}
+
+function clearDistractedTimer() {
+  if (distractedTimerId !== null) {
+    clearTimeout(distractedTimerId);
+    distractedTimerId = null;
+  }
+}
+
+async function applyTabStatus(status) {
+  await appendFocusLog(status);
+
+  if (status === "on-task") {
+    clearDistractedTimer();
+    await setCharacterMood("on-task");
+    return;
+  }
+
+  if (distractedTimerId !== null) return;
+
+  distractedTimerId = setTimeout(async () => {
+    distractedTimerId = null;
+    const current = await classifyActiveTab();
+    if (current === "distracted") {
+      await setCharacterMood("distracted");
+    }
+  }, DISTRACTED_DELAY_MS);
+}
+
+async function scanTabText(tab) {
+  const parts = [tab.url || "", tab.title || ""];
+  if (tab.id != null) {
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => document.body?.innerText?.slice(0, 50_000) ?? "",
+      });
+      parts.push(results?.[0]?.result ?? "");
+    } catch {
+      // Restricted pages (chrome://, Web Store, etc.) cannot be scanned.
+    }
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+function classifyText(haystack) {
+  if (taskKeywords.length === 0) return "distracted";
+  const onTask = taskKeywords.some((keyword) => haystack.includes(keyword));
+  return onTask ? "on-task" : "distracted";
+}
+
+async function classifyTab(tab) {
+  await loadKeywords();
+  if (!lockInActive || !tab) return null;
+  const haystack = await scanTabText(tab);
+  return classifyText(haystack);
+}
+
+async function classifyActiveTab() {
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  return classifyTab(tabs[0]);
+}
+
+async function evaluateActiveTab() {
+  const status = await classifyActiveTab();
+  if (status) {
+    await applyTabStatus(status);
+  }
+}
+
+async function startLockIn({ taskText, useTimer, durationSeconds }) {
+  const text = String(taskText || "").trim();
+  await chrome.storage.local.set({
+    [LOCK_IN_KEY]: true,
+    [TASK_TEXT_KEY]: text,
+    [FOCUS_LOG_KEY]: [],
+  });
+  lockInActive = true;
+  await saveKeywords(extractKeywords(text));
+  await setCharacterMood("on-task");
+  clearDistractedTimer();
+
+  let timer = await readTimer();
+  if (useTimer) {
+    timer = await startTimer(durationSeconds);
+  }
+
+  await evaluateActiveTab();
+  return { lockInActive: true, timer };
+}
+
+async function stopLockIn() {
+  lockInActive = false;
+  clearDistractedTimer();
+  await chrome.storage.local.set({ [LOCK_IN_KEY]: false });
+  await setCharacterMood("on-task");
+  const timer = await cancelTimer();
+  return { lockInActive: false, timer };
+}
+
+loadKeywords();
 readTimer();
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -159,20 +280,25 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.type === "OPEN_TASK_TABS") {
-    const urls = message.links || message.urls || [];
+  if (message.type === "START_LOCK_IN") {
+    startLockIn(message).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "STOP_LOCK_IN") {
+    stopLockIn().then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "UPDATE_TASK") {
     (async () => {
-      const ids = [];
-      for (const url of urls) {
-        const tab = await chrome.tabs.create({ url });
-        if (tab.id != null) {
-          ids.push(tab.id);
-        }
-      }
-      focusTabs = new Set(ids);
-      await saveFocusTabs();
+      const text = String(message.taskText || "").trim();
+      await chrome.storage.local.set({ [TASK_TEXT_KEY]: text });
+      await saveKeywords(extractKeywords(text));
+      await evaluateActiveTab();
+      sendResponse({ ok: true });
     })();
-    return;
+    return true;
   }
 
   if (message.type === "GET_LOG") {
@@ -211,8 +337,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  await loadFocusTabs();
-  const status = focusTabs.has(activeInfo.tabId) ? "on-task" : "distracted";
-  await appendFocusLog(status);
+chrome.tabs.onActivated.addListener(async () => {
+  await evaluateActiveTab();
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" && !changeInfo.url && !changeInfo.title) {
+    return;
+  }
+  if (!tab.active) return;
+  const status = await classifyTab(tab);
+  if (status) {
+    await applyTabStatus(status);
+  }
 });

@@ -1,57 +1,26 @@
 const LOG_POLL_MS = 10_000;
 const DEFAULT_SECONDS = 25 * 60;
+const TIMER_OPEN_KEY = "timerDropdownOpen";
 
+const timerDropdown = document.getElementById("timer-dropdown");
 const timerDisplay = document.getElementById("timer-display");
-const startBtn = document.getElementById("start-task-btn");
-const pauseBtn = document.getElementById("pause-timer-btn");
-const cancelBtn = document.getElementById("cancel-timer-btn");
 const hoursInput = document.getElementById("duration-hours");
 const minutesInput = document.getElementById("duration-minutes");
 const secondsInput = document.getElementById("duration-seconds");
 const characterImg = document.getElementById("character-img");
+const lockInBtn = document.getElementById("lock-in-btn");
+const lockInHint = document.getElementById("lock-in-hint");
 const summarySection = document.getElementById("summary-section");
 const summaryText = document.getElementById("summary-text");
+const taskTextInput = document.getElementById("task-text");
+const changeTaskBtn = document.getElementById("change-task-btn");
 
 let snapshot = null;
 let displayId = null;
 let logPollId = null;
 let summaryShown = false;
-
-function getLinksForTask(taskText) {
-  const text = taskText.toLowerCase();
-
-  const keywordLinks = {
-    chemistry: [
-      "https://www.chemguide.co.uk/",
-      "https://ptable.com/",
-      "https://www.khanacademy.org/science/chemistry",
-    ],
-    essay: [
-      "https://www.citationmachine.net/",
-      "https://docs.google.com/document/create",
-    ],
-  };
-
-  for (const keyword of Object.keys(keywordLinks)) {
-    if (text.includes(keyword)) {
-      return keywordLinks[keyword];
-    }
-  }
-
-  return [
-    "https://www.google.com/search?q=" + encodeURIComponent(taskText),
-  ];
-}
-
-function openTaskTabs() {
-  const taskText = document.getElementById("task-text")?.value?.trim() ?? "";
-  if (!taskText) return;
-
-  chrome.runtime.sendMessage({
-    type: "OPEN_TASK_TABS",
-    links: getLinksForTask(taskText),
-  });
-}
+let lockInActive = false;
+let taskEditing = false;
 
 function formatTime(totalSeconds) {
   const safe = Math.max(0, totalSeconds);
@@ -87,20 +56,13 @@ function remainingFromSnapshot() {
   return snapshot.remainingSeconds ?? snapshot.durationSeconds ?? DEFAULT_SECONDS;
 }
 
-function setControls(state) {
-  const running = state.status === "running";
-  const paused = state.status === "paused";
-  startBtn.disabled = running || paused;
-  pauseBtn.disabled = !running && !paused;
-  cancelBtn.disabled = !running && !paused && state.status !== "finished";
-  pauseBtn.textContent = paused ? "Resume" : "Pause";
-  const lockDuration = running || paused;
-  if (hoursInput) hoursInput.disabled = lockDuration;
-  if (minutesInput) minutesInput.disabled = lockDuration;
-  if (secondsInput) secondsInput.disabled = lockDuration;
+function setDurationLock(locked) {
+  if (hoursInput) hoursInput.disabled = locked;
+  if (minutesInput) minutesInput.disabled = locked;
+  if (secondsInput) secondsInput.disabled = locked;
 }
 
-function sendTimer(type, extra, callback) {
+function sendMessage(type, extra, callback) {
   chrome.runtime.sendMessage({ type, ...extra }, (response) => {
     if (chrome.runtime.lastError) {
       callback?.(null);
@@ -113,8 +75,9 @@ function sendTimer(type, extra, callback) {
 function applySnapshot(state) {
   if (!state) return;
   snapshot = state;
-  setControls(state);
   timerDisplay.textContent = formatTime(remainingFromSnapshot());
+  const timerBusy = state.status === "running" || state.status === "paused";
+  setDurationLock(timerBusy);
 
   if (state.status === "idle" || state.status === "finished") {
     setDurationInputs(state.durationSeconds || DEFAULT_SECONDS);
@@ -133,7 +96,7 @@ function applySnapshot(state) {
 }
 
 function refreshTimer() {
-  sendTimer("GET_TIMER", {}, applySnapshot);
+  sendMessage("GET_TIMER", {}, applySnapshot);
 }
 
 function getEntryStatus(entry) {
@@ -145,15 +108,12 @@ function getEntryStatus(entry) {
 }
 
 function setCharacterMood(status) {
-  const isOnTask = status === "on-task";
+  const isOnTask = status !== "distracted";
   characterImg.classList.remove("on-task", "distracted");
   characterImg.classList.add(isOnTask ? "on-task" : "distracted");
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
   characterImg.alt = isOnTask ? "on-task" : "distracted";
-
-  if (characterImg.tagName === "IMG") {
-    characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
-  }
+  characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
 }
 
 function requestFocusLog(callback) {
@@ -173,14 +133,15 @@ function requestFocusLog(callback) {
   }
 }
 
+function applyStoredMood(status) {
+  if (status === "on-task" || status === "distracted") {
+    setCharacterMood(status);
+  }
+}
+
 function pollLatestFocusStatus() {
-  requestFocusLog((focusLog) => {
-    if (!Array.isArray(focusLog) || focusLog.length === 0) return;
-    const latest = focusLog[focusLog.length - 1];
-    const status = getEntryStatus(latest);
-    if (status === "on-task" || status === "distracted") {
-      setCharacterMood(status);
-    }
+  chrome.storage.local.get("characterMood").then((result) => {
+    applyStoredMood(result.characterMood);
   });
 }
 
@@ -195,30 +156,118 @@ function showSummary() {
   });
 }
 
-function startFocusSession() {
-  openTaskTabs();
-  summarySection.hidden = true;
-  summaryShown = false;
-  sendTimer("START_TIMER", { durationSeconds: durationFromInputs() }, (state) => {
-    applySnapshot(state);
+function setLockInUi(active) {
+  lockInActive = Boolean(active);
+  lockInBtn.setAttribute("aria-pressed", String(lockInActive));
+  lockInHint.textContent = lockInActive
+    ? "click to unactivate lock-in mode"
+    : "click to activate lock-in mode";
+  setTaskLocked(lockInActive && !taskEditing);
+}
+
+function setTaskLocked(locked) {
+  if (!taskTextInput) return;
+  taskTextInput.disabled = Boolean(locked);
+  if (changeTaskBtn) {
+    changeTaskBtn.hidden = !lockInActive;
+    changeTaskBtn.classList.toggle("editing", Boolean(lockInActive && taskEditing));
+  }
+}
+
+function beginChangeTask() {
+  if (!lockInActive) return;
+  taskEditing = true;
+  setTaskLocked(false);
+  taskTextInput?.focus();
+  taskTextInput?.select();
+}
+
+function commitTaskChange() {
+  if (!lockInActive || !taskEditing) {
+    setTaskLocked(lockInActive);
+    return;
+  }
+  taskEditing = false;
+  const taskText = taskTextInput?.value?.trim() ?? "";
+  sendMessage("UPDATE_TASK", { taskText }, () => {
+    setTaskLocked(true);
     pollLatestFocusStatus();
   });
 }
 
-function pauseOrResumeTimer() {
-  const type = snapshot?.status === "paused" ? "RESUME_TIMER" : "PAUSE_TIMER";
-  sendTimer(type, {}, applySnapshot);
-}
-
-function cancelFocusSession() {
+function activateLockIn() {
   summarySection.hidden = true;
   summaryShown = false;
-  sendTimer("CANCEL_TIMER", {}, applySnapshot);
+  taskEditing = false;
+  sendMessage(
+    "START_LOCK_IN",
+    {
+      taskText: taskTextInput?.value?.trim() ?? "",
+      useTimer: Boolean(timerDropdown?.open),
+      durationSeconds: durationFromInputs(),
+    },
+    (response) => {
+      if (!response) return;
+      setLockInUi(true);
+      if (response.timer) applySnapshot(response.timer);
+      pollLatestFocusStatus();
+    }
+  );
 }
 
-startBtn?.addEventListener("click", startFocusSession);
-pauseBtn?.addEventListener("click", pauseOrResumeTimer);
-cancelBtn?.addEventListener("click", cancelFocusSession);
+function deactivateLockIn() {
+  summarySection.hidden = true;
+  summaryShown = false;
+  taskEditing = false;
+  sendMessage("STOP_LOCK_IN", {}, (response) => {
+    setLockInUi(false);
+    setCharacterMood("on-task");
+    if (response?.timer) applySnapshot(response.timer);
+  });
+}
+
+function toggleLockIn() {
+  if (lockInActive) {
+    deactivateLockIn();
+    return;
+  }
+  activateLockIn();
+}
+
+chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "taskText"]).then((result) => {
+  applyStoredMood(result.characterMood);
+  setLockInUi(result.lockInActive);
+  if (typeof result.taskText === "string" && taskTextInput) {
+    taskTextInput.value = result.taskText;
+  }
+  if (timerDropdown) {
+    timerDropdown.open = Boolean(result[TIMER_OPEN_KEY]);
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.characterMood) {
+    applyStoredMood(changes.characterMood.newValue);
+  }
+  if (changes.lockInActive) {
+    setLockInUi(changes.lockInActive.newValue);
+  }
+});
+
+timerDropdown?.addEventListener("toggle", () => {
+  chrome.storage.local.set({ [TIMER_OPEN_KEY]: Boolean(timerDropdown.open) });
+});
+
+lockInBtn?.addEventListener("click", toggleLockIn);
+changeTaskBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  if (taskEditing) {
+    commitTaskChange();
+    return;
+  }
+  beginChangeTask();
+});
 
 refreshTimer();
 pollLatestFocusStatus();
