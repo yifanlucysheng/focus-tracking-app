@@ -1,0 +1,229 @@
+@font-face {
+  font-family: "PP Mondwest";
+  src: url("../assets/fonts/PPMondwest-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "LXGW Marker Gothic";
+  src: url("../assets/fonts/LXGWMarkerGothic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --cream: #f7efd8;
+  --focus: #2a186b;
+  --buddy: #646ca6;
+  --tagline: #d59a2c;
+  --ink: #2a186b;
+  --page: #ffffff;
+  --soft-shadow: 0 10px 28px rgba(42, 24, 107, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+  font-family: "LXGW Marker Gothic", "Trebuchet MS", sans-serif;
+}
+
+.top-bar {
+  height: 22px;
+  background: var(--cream);
+}
+
+.page {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 40px 48px 64px;
+}
+
+.hero {
+  display: block;
+}
+
+.brand {
+  padding-top: 4px;
+  min-width: 0;
+}
+
+.logo {
+  margin: 0;
+  font-family: "PP Mondwest", "Courier New", monospace;
+  font-size: 200px;
+  line-height: 0.95;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.logo-line {
+  display: block;
+  position: relative;
+  width: fit-content;
+}
+
+.logo-focus {
+  color: var(--focus);
+}
+
+.logo-buddy-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.18em;
+  width: fit-content;
+  margin-left: 0.35em;
+}
+
+.logo-buddy {
+  color: var(--buddy);
+  flex: 0 0 auto;
+}
+
+.logo-star {
+  position: absolute;
+  top: 0.06em;
+  /* Sit tight against the end of "Focus" */
+  right: -0.18em;
+  width: 0.22em;
+  height: 0.22em;
+  fill: var(--focus);
+}
+
+.tagline {
+  margin: 20px 0 0;
+  color: var(--tagline);
+  font-family: "LXGW Marker Gothic", sans-serif;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.preview {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  /* Pull character up so it sits beside "Buddy" / "dy" */
+  margin-top: -0.18em;
+  margin-left: 0.12em;
+}
+
+#character-preview {
+  width: 1.85em;
+  height: auto;
+  max-height: 2em;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 20px rgba(42, 24, 107, 0.12));
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+
+#character-preview.is-switching {
+  opacity: 0.35;
+  transform: scale(0.96);
+}
+
+.picker {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+  margin-top: 48px;
+}
+
+.picker-copy {
+  margin: 0;
+  max-width: 14em;
+  color: var(--ink);
+  font-family: "LXGW Marker Gothic", sans-serif;
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.picker-options {
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+}
+
+.buddy-option {
+  appearance: none;
+  border: 3px solid transparent;
+  background: transparent;
+  padding: 8px;
+  border-radius: 22px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.buddy-option img {
+  display: block;
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+}
+
+.buddy-option:hover {
+  transform: translateY(-3px);
+}
+
+.buddy-option.is-selected,
+.buddy-option[aria-selected="true"] {
+  border-color: rgba(42, 24, 107, 0.3);
+  box-shadow: var(--soft-shadow);
+}
+
+.buddy-option:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding: 28px 24px 48px;
+  }
+
+  .logo {
+    font-size: clamp(72px, 18vw, 200px);
+  }
+
+  .tagline {
+    font-size: clamp(18px, 3.2vw, 28px);
+  }
+
+  .picker-copy {
+    font-size: clamp(22px, 4vw, 36px);
+  }
+
+  .buddy-option img {
+    width: 110px;
+    height: 110px;
+  }
+}
+
+@media (max-width: 640px) {
+  .picker {
+    grid-template-columns: 1fr;
+  }
+
+  .tagline {
+    white-space: normal;
+  }
+
+  .picker-copy {
+    max-width: none;
+  }
+}
