@@ -132,13 +132,33 @@ function getEntryStatus(entry) {
   return null;
 }
 
-function setCharacterMood(status) {
-  const isOnTask = status !== "distracted";
+function applyBuddyVisual(visual) {
+  if (!characterImg || !visual) return;
+  const mood = visual.mood === "distracted" ? "distracted" : "on-task";
+  const isOnTask = mood !== "distracted";
   characterImg.classList.remove("on-task", "distracted");
   characterImg.classList.add(isOnTask ? "on-task" : "distracted");
   characterImg.setAttribute("aria-label", isOnTask ? "on-task" : "distracted");
   characterImg.alt = isOnTask ? "on-task" : "distracted";
-  characterImg.src = isOnTask ? "sleepbunny.png" : "angrybunny.png";
+  if (visual.buddyFile) {
+    characterImg.src = visual.buddyFile;
+  }
+}
+
+function refreshBuddyVisual() {
+  sendMessage("GET_BUDDY_VISUAL", {}, (visual) => {
+    if (visual) applyBuddyVisual(visual);
+  });
+}
+
+function setCharacterMood(status) {
+  // Mood-only fallback while waiting for the full visual resolve.
+  applyBuddyVisual({
+    mood: status === "distracted" ? "distracted" : "on-task",
+    buddyFile:
+      status === "distracted" ? "angrybunny.png" : "sleepbunny.png",
+  });
+  refreshBuddyVisual();
 }
 
 function requestFocusLog(callback) {
@@ -165,9 +185,7 @@ function applyStoredMood(status) {
 }
 
 function pollLatestFocusStatus() {
-  chrome.storage.local.get("characterMood").then((result) => {
-    applyStoredMood(result.characterMood);
-  });
+  refreshBuddyVisual();
 }
 
 function showSummary() {
@@ -272,12 +290,18 @@ chrome.storage.local.get(["characterMood", "lockInActive", TIMER_OPEN_KEY, "task
   if (timerDropdown) {
     timerDropdown.open = Boolean(result[TIMER_OPEN_KEY]);
   }
+  refreshBuddyVisual();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.characterMood) {
-    applyStoredMood(changes.characterMood.newValue);
+  if (
+    changes.characterMood ||
+    changes.characterHealth ||
+    changes["focusBuddy.selectedCharacter"] ||
+    changes.liveSessionActive
+  ) {
+    refreshBuddyVisual();
   }
   if (changes.lockInActive) {
     setLockInUi(changes.lockInActive.newValue);

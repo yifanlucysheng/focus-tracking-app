@@ -1,24 +1,6 @@
 /** @typedef {import('./profileTypes.js').ProfileStatsView} ProfileStatsView */
 
-/**
- * @param {string} characterId
- * @returns {{ src: string, alt: string, name: string }}
- */
-function characterMeta(characterId) {
-  if (characterId === "cat") {
-    return {
-      src: "/cat.png",
-      alt: "",
-      name: "Cat Buddy",
-    };
-  }
-
-  return {
-    src: "/sleepbunny.png",
-    alt: "",
-    name: "Moon Buddy",
-  };
-}
+import { buddyVisualForHealth } from "./characterHealthVisual.js";
 
 /**
  * @param {string} value
@@ -42,7 +24,6 @@ export function renderProfileStats(root, stats, options = {}) {
   if (!root) return;
 
   const characterId = options.characterId || "sleepbunny";
-  const buddy = characterMeta(characterId);
   const emptyPrivate = !stats.hasSessions;
   const username = (options.username || "You").trim() || "You";
   const who = escapeHtml(username);
@@ -58,13 +39,22 @@ export function renderProfileStats(root, stats, options = {}) {
     0,
     Math.min(100, Math.floor(Number(stats.characterHealth) || 0))
   );
+  const buddy = buddyVisualForHealth(
+    characterId,
+    showHealth ? healthPct : 95
+  );
   const xpPct = Math.round(Math.min(1, Math.max(0, stats.xpProgress)) * 100);
 
   root.innerHTML = `
     <div class="profile-layout">
       <div class="profile-hero-card">
         <div class="profile-buddy-wrap">
-          <img class="profile-buddy-img" src="${buddy.src}" alt="${buddy.alt}" />
+          <img
+            class="profile-buddy-img"
+            data-buddy-visual
+            src="${buddy.src}"
+            alt="${buddy.alt}"
+          />
         </div>
         <div class="profile-buddy-meta">
           <p class="profile-kicker">${whose} companion</p>
@@ -72,7 +62,7 @@ export function renderProfileStats(root, stats, options = {}) {
           <p class="profile-health-note">Make sure to stay on task to keep your companion healthy!</p>
           <p class="profile-health-label">
             Character Health
-            <span>${
+            <span data-health-label>${
               showHealth
                 ? `${healthPct}/100 · ${stats.characterHealthLabel}`
                 : "—"
@@ -85,10 +75,13 @@ export function renderProfileStats(root, stats, options = {}) {
             aria-valuemax="100"
             aria-valuenow="${showHealth ? healthPct : 0}"
             aria-label="Character health"
+            data-health-bar
           >
-            <div class="profile-bar-fill profile-bar-health" style="width: ${
-              showHealth ? healthPct : 0
-            }%"></div>
+            <div
+              class="profile-bar-fill profile-bar-health"
+              data-health-fill
+              style="width: ${showHealth ? healthPct : 0}%"
+            ></div>
           </div>
         </div>
       </div>

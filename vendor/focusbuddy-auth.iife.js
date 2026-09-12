@@ -31319,15 +31319,18 @@ This typically indicates that your device does not have a healthy Internet conne
   }
   function calculateCharacterHealth(sessions) {
     const completed = sessions.filter((s2) => s2.completed);
-    if (completed.length === 0) return 100;
+    if (completed.length === 0) return 95;
     const last = completed[completed.length - 1];
+    if (typeof last.characterHealth === "number" && Number.isFinite(last.characterHealth)) {
+      return Math.max(0, Math.min(100, Math.floor(last.characterHealth)));
+    }
     if (typeof last.onTaskRatio === "number") {
       return characterHealthFromOnTaskRatio(last.onTaskRatio);
     }
     if (typeof last.onTaskPercent === "number") {
       return characterHealthFromOnTaskRatio(last.onTaskPercent / 100);
     }
-    return 100;
+    return 95;
   }
   function characterHealthLabel(health) {
     if (health <= 0) return "Resting";
@@ -31515,11 +31518,20 @@ This typically indicates that your device does not have a healthy Internet conne
           merge: true
         });
       }
+      const existingSnap = await getDoc(doc(db2, "users", userId, "public", "stats"));
+      const existing = existingSnap.exists() ? existingSnap.data() : null;
+      if (existing?.liveSessionActive) {
+        delete payload.characterHealth;
+        delete payload.liveSessionActive;
+      }
       await setDoc(doc(db2, "users", userId, "public", "stats"), payload, {
         merge: true
       });
       await clearPendingSyncForUser(userId);
-      return { id: userId, ...payload };
+      return { id: userId, ...payload, ...existing?.liveSessionActive ? {
+        characterHealth: existing.characterHealth,
+        liveSessionActive: true
+      } : {} };
     } catch (err) {
       console.error(
         "[Focus Buddy] Profile sync failed \u2014 local progress kept; queued for retry:",
@@ -31536,12 +31548,19 @@ This typically indicates that your device does not have a healthy Internet conne
     }
   }
   async function syncLiveCharacterHealth(health, options = {}) {
-    const auth2 = getFirebaseAuth();
+    await waitForSignedInUser(5e3);
+    let auth2;
+    try {
+      auth2 = getFirebaseAuth();
+    } catch {
+      return null;
+    }
     const userId = auth2?.currentUser?.uid;
     if (!userId) return null;
+    const parsed = Number(health);
     const characterHealth = Math.max(
       0,
-      Math.min(100, Math.floor(Number(health) || 0))
+      Math.min(100, Math.floor(Number.isFinite(parsed) ? parsed : 0))
     );
     const liveSessionActive = Boolean(options.liveSessionActive);
     const payload = {
@@ -31560,6 +31579,29 @@ This typically indicates that your device does not have a healthy Internet conne
       console.warn("[Focus Buddy] Live character health sync failed:", err);
       return null;
     }
+  }
+  async function waitForSignedInUser(timeoutMs = 5e3) {
+    let auth2;
+    try {
+      auth2 = getFirebaseAuth();
+    } catch {
+      return null;
+    }
+    if (auth2.currentUser?.uid) return auth2.currentUser;
+    return new Promise((resolve) => {
+      let unsub = null;
+      const timer = setTimeout(() => {
+        unsub?.();
+        resolve(auth2.currentUser);
+      }, timeoutMs);
+      unsub = onAuthStateChanged(auth2, (user) => {
+        if (user?.uid) {
+          clearTimeout(timer);
+          unsub?.();
+          resolve(user);
+        }
+      });
+    });
   }
   async function syncLiveCharacterHealthFromRatio(onTaskRatio, options = {}) {
     return syncLiveCharacterHealth(
@@ -31612,6 +31654,12 @@ This typically indicates that your device does not have a healthy Internet conne
       completed: true,
       onTaskRatio
     };
+    if (typeof sessionInput.characterHealth === "number") {
+      session.characterHealth = Math.max(
+        0,
+        Math.min(100, Math.floor(sessionInput.characterHealth))
+      );
+    }
     if (sessionInput.distractionDomains) {
       session.distractionDomains = sessionInput.distractionDomains;
     }
@@ -31651,20 +31699,26 @@ This typically indicates that your device does not have a healthy Internet conne
             { merge: true }
           );
         }
+        const liveSnap = await getDoc(doc(db2, "users", item.userId, "public", "stats"));
+        const liveActive = Boolean(liveSnap.exists() && liveSnap.data()?.liveSessionActive);
+        const publicPayload = {
+          level: item.level ?? item.focus_level,
+          xp: item.xp,
+          xpModel: "progress",
+          streakDays: item.streakDays ?? item.focus_streak,
+          sessionsCompleted: item.sessionsCompleted ?? item.sessions_completed ?? 0,
+          longestSessionMs: item.longestSessionMs ?? item.longest_session_ms ?? 0,
+          topDistraction: item.topDistraction ?? item.top_distraction ?? null,
+          topProductiveSite: item.topProductiveSite ?? item.top_productive_site ?? null,
+          updatedAt: Date.now()
+        };
+        if (!liveActive) {
+          publicPayload.characterHealth = item.characterHealth ?? item.character_health ?? 0;
+          publicPayload.liveSessionActive = false;
+        }
         await setDoc(
           doc(db2, "users", item.userId, "public", "stats"),
-          {
-            level: item.level ?? item.focus_level,
-            xp: item.xp,
-            xpModel: "progress",
-            streakDays: item.streakDays ?? item.focus_streak,
-            sessionsCompleted: item.sessionsCompleted ?? item.sessions_completed ?? 0,
-            longestSessionMs: item.longestSessionMs ?? item.longest_session_ms ?? 0,
-            topDistraction: item.topDistraction ?? item.top_distraction ?? null,
-            topProductiveSite: item.topProductiveSite ?? item.top_productive_site ?? null,
-            characterHealth: item.characterHealth ?? item.character_health ?? 0,
-            updatedAt: Date.now()
-          },
+          publicPayload,
           { merge: true }
         );
       } catch (err) {

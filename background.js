@@ -11,6 +11,18 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 const DISTRACTED_DELAY_MS = 10_000;
 const LIVE_HEALTH_SYNC_MIN_MS = 1500;
 const CHARACTER_HEALTH_KEY = "characterHealth";
+const SELECTED_CHARACTER_KEY = "focusBuddy.selectedCharacter";
+/** Session starts at stage 0 (95 HP / cat.png). */
+const SESSION_START_HEALTH = 95;
+const HEALTH_STAGE_VALUES = [95, 80, 65, 50, 35, 20, 0];
+/** Stay on the same tab/status this long before on-task / off-task timers start. */
+const TAB_DWELL_MS = 10_000;
+/** No stage up/down for this long after lock-in starts (blocks stale/race drops to cat7). */
+const HEALTH_DROP_GRACE_MS = 20_000;
+/** After dwell, 2 minutes on-task → one stage healthier. */
+const ON_TASK_STEP_MS = 2 * 60 * 1000;
+/** After dwell, 1 minute distracted → one stage lower. */
+const OFF_TASK_STEP_MS = 1 * 60 * 1000;
 
 let taskKeywords = [];
 let lockInActive = false;
@@ -22,6 +34,209 @@ let lastLiveHealthSyncAt = 0;
 let liveHealthSyncTimer = null;
 let liveHealthTickTimer = null;
 let healthResetRetryTimer = null;
+/** @type {number} 0 = healthiest … 6 = lowest */
+let sessionHealthStage = 0;
+/** @type {number} */
+let lockInStartedAt = 0;
+/**
+ * Tracks dwell + accrued on-task / off-task time for stage changes.
+ * @type {{
+ *   status: 'on-task'|'distracted'|null,
+ *   tabId: number|null,
+ *   since: number,
+ *   dwellDone: boolean,
+ *   accruedMs: number,
+ *   lastTick: number,
+ * }|null}
+ */
+let healthProgress = null;
+
+function healthFromStage(stage) {
+  const i = Math.max(0, Math.min(HEALTH_STAGE_VALUES.length - 1, Math.floor(Number(stage) || 0)));
+  return HEALTH_STAGE_VALUES[i];
+}
+
+function stageFromHealth(health) {
+  const h = Math.max(0, Math.min(100, Number(health) || 0));
+  let best = 0;
+  let bestDist = Math.abs(HEALTH_STAGE_VALUES[0] - h);
+  for (let i = 1; i < HEALTH_STAGE_VALUES.length; i += 1) {
+    const dist = Math.abs(HEALTH_STAGE_VALUES[i] - h);
+    if (dist < bestDist) {
+      best = i;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/**
+ * @param {number} health
+ * @returns {string}
+ */
+function catFileForHealth(health) {
+  const stage = stageFromHealth(health);
+  if (stage <= 0) return "cat.png";
+  return `cat${stage + 1}.png`;
+}
+
+/**
+ * Resolve the PNG shown in the popup + on-page overlay.
+ * @returns {Promise<{ characterId: string, buddyFile: string, characterHealth: number, mood: string, liveSessionActive: boolean }>}
+ */
+async function resolveBuddyVisual() {
+  const result = await chrome.storage.local.get([
+    SELECTED_CHARACTER_KEY,
+    CHARACTER_HEALTH_KEY,
+    MOOD_KEY,
+    "liveSessionActive",
+  ]);
+  const characterId =
+    result[SELECTED_CHARACTER_KEY] === "cat" ? "cat" : "sleepbunny";
+  const mood =
+    result[MOOD_KEY] === "distracted" ? "distracted" : "on-task";
+  const liveSessionActive = Boolean(result.liveSessionActive);
+  const rawHealth = Number(result[CHARACTER_HEALTH_KEY]);
+  let characterHealth = Number.isFinite(rawHealth)
+    ? rawHealth
+    : SESSION_START_HEALTH;
+  if (liveSessionActive && characterHealth <= 0) {
+    characterHealth = SESSION_START_HEALTH;
+  }
+
+  const buddyFile =
+    characterId === "cat"
+      ? catFileForHealth(characterHealth)
+      : mood === "distracted"
+        ? "angrybunny.png"
+        : "sleepbunny.png";
+
+  return {
+    characterId,
+    buddyFile,
+    characterHealth,
+    mood,
+    liveSessionActive,
+  };
+}
+
+/**
+ * Push current buddy art to every tab overlay (and keep storage as source of truth for popup).
+ */
+async function broadcastBuddyVisual() {
+  const visual = await resolveBuddyVisual();
+  try {
+    const tabs = await chrome.tabs.query({});
+    await Promise.all(
+      tabs.map((tab) => {
+        if (tab.id == null) return Promise.resolve();
+        return chrome.tabs
+          .sendMessage(tab.id, {
+            type: "BUDDY_VISUAL",
+            ...visual,
+          })
+          .catch(() => {});
+      })
+    );
+  } catch {
+    // No tabs / no permission.
+  }
+  return visual;
+}
+
+/**
+ * @param {string} characterId
+ */
+async function setSelectedCharacter(characterId) {
+  const id = characterId === "cat" ? "cat" : "sleepbunny";
+  await chrome.storage.local.set({ [SELECTED_CHARACTER_KEY]: id });
+  await broadcastBuddyVisual();
+  return id;
+}
+
+function resetHealthProgressState() {
+  healthProgress = {
+    status: null,
+    tabId: null,
+    since: Date.now(),
+    dwellDone: false,
+    accruedMs: 0,
+    lastTick: Date.now(),
+  };
+}
+
+/**
+ * Tab or focus-status changes restart the 10s dwell before timers run.
+ * @param {'on-task'|'distracted'} status
+ * @param {number|null|undefined} tabId
+ */
+function noteFocusStatusForHealth(status, tabId) {
+  const now = Date.now();
+  const tid = typeof tabId === "number" ? tabId : null;
+  if (!healthProgress) resetHealthProgressState();
+  const same =
+    healthProgress.status === status && healthProgress.tabId === tid;
+  if (same) return;
+  healthProgress = {
+    status,
+    tabId: tid,
+    since: now,
+    dwellDone: false,
+    accruedMs: 0,
+    lastTick: now,
+  };
+}
+
+/**
+ * Advance on-task / off-task stage timers after the 10s tab dwell.
+ */
+async function tickSessionHealth() {
+  if (!lockInActive) return;
+  if (!healthProgress) resetHealthProgressState();
+
+  const now = Date.now();
+  // Cap dt so a sleeping service worker can't dump minutes of progress in one tick.
+  const dt = Math.min(2000, Math.max(0, now - (healthProgress.lastTick || now)));
+  healthProgress.lastTick = now;
+
+  // Hard grace: never change stages right after lock-in (prevents instant cat7).
+  if (now - lockInStartedAt < HEALTH_DROP_GRACE_MS) return;
+
+  if (!healthProgress.status) return;
+
+  if (!healthProgress.dwellDone) {
+    if (now - healthProgress.since >= TAB_DWELL_MS) {
+      healthProgress.dwellDone = true;
+      healthProgress.accruedMs = 0;
+    }
+    return;
+  }
+
+  healthProgress.accruedMs += dt;
+
+  if (healthProgress.status === "on-task") {
+    if (healthProgress.accruedMs < ON_TASK_STEP_MS) return;
+    healthProgress.accruedMs = 0;
+    if (sessionHealthStage <= 0) return; // already healthiest
+    sessionHealthStage -= 1;
+    await pushLiveCharacterHealth(healthFromStage(sessionHealthStage), {
+      liveSessionActive: true,
+      force: true,
+    });
+    return;
+  }
+
+  if (healthProgress.status === "distracted") {
+    if (healthProgress.accruedMs < OFF_TASK_STEP_MS) return;
+    healthProgress.accruedMs = 0;
+    if (sessionHealthStage >= HEALTH_STAGE_VALUES.length - 1) return;
+    sessionHealthStage += 1;
+    await pushLiveCharacterHealth(healthFromStage(sessionHealthStage), {
+      liveSessionActive: true,
+      force: true,
+    });
+  }
+}
 
 function stopLiveHealthTicker() {
   if (liveHealthSyncTimer !== null) {
@@ -36,14 +251,9 @@ function stopLiveHealthTicker() {
 
 function startLiveHealthTicker() {
   stopLiveHealthTicker();
-  liveHealthTickTimer = setInterval(async () => {
-    if (!lockInActive) {
-      stopLiveHealthTicker();
-      return;
-    }
-    const health = await currentSessionCharacterHealth();
-    await pushLiveCharacterHealth(health, { liveSessionActive: true });
-  }, LIVE_HEALTH_SYNC_MIN_MS);
+  liveHealthTickTimer = setInterval(() => {
+    void tickSessionHealth();
+  }, 1000);
 }
 
 try {
@@ -212,12 +422,12 @@ async function finishTimer(state) {
   await writeTimer(finished);
 
   stopLiveHealthTicker();
-  const finalHealth = await currentSessionCharacterHealth(endedAt);
+  const finalHealth = healthFromStage(sessionHealthStage);
   await pushLiveCharacterHealth(finalHealth, {
     liveSessionActive: false,
     force: true,
   });
-  await recordFocusSessionFromTimer(finished);
+  await recordFocusSessionFromTimer(finished, finalHealth);
 
   const handled = { ...finished, completionHandled: true };
   return writeTimer(handled);
@@ -228,8 +438,9 @@ async function finishTimer(state) {
  * Local save always happens; Supabase sync is best-effort with retry queue.
  *
  * @param {object} timerState
+ * @param {number} [characterHealth]
  */
-async function recordFocusSessionFromTimer(timerState) {
+async function recordFocusSessionFromTimer(timerState, characterHealth) {
   await AUTH_READY;
   if (!globalThis.FocusBuddyAuth?.recordCompletedSession) {
     console.warn(
@@ -247,6 +458,10 @@ async function recordFocusSessionFromTimer(timerState) {
     timerState.startedAt,
     timerState.endedAt
   );
+  const health =
+    typeof characterHealth === "number"
+      ? characterHealth
+      : healthFromStage(sessionHealthStage);
 
   try {
     const result = await globalThis.FocusBuddyAuth.recordCompletedSession({
@@ -255,6 +470,7 @@ async function recordFocusSessionFromTimer(timerState) {
       endedAt: timerState.endedAt,
       durationMs,
       onTaskRatio,
+      characterHealth: health,
       distractionDomains: domainMaps.distractionDomains,
       productiveDomains: domainMaps.productiveDomains,
     });
@@ -264,6 +480,10 @@ async function recordFocusSessionFromTimer(timerState) {
         timerState.sessionId
       );
     }
+    await pushLiveCharacterHealth(health, {
+      liveSessionActive: false,
+      force: true,
+    });
   } catch (err) {
     console.error(
       "[Focus Buddy] Failed to record completed focus session (timer still finished):",
@@ -322,17 +542,11 @@ async function estimateOnTaskRatio(startedAt, endedAt) {
 }
 
 /**
- * Character health for the active session: 100 − (% time spent off-task).
- * @param {number} [endedAt]
- * @returns {Promise<number>}
+ * Current staged character health for the active session.
+ * @returns {number}
  */
-async function currentSessionCharacterHealth(endedAt = Date.now()) {
-  const timer = await readTimer();
-  const startedAt =
-    typeof timer.startedAt === "number" ? timer.startedAt : Date.now();
-  const ratio = await estimateOnTaskRatio(startedAt, endedAt);
-  const offTaskPercent = Math.round((1 - ratio) * 100);
-  return Math.max(0, Math.min(100, 100 - offTaskPercent));
+function currentSessionCharacterHealth() {
+  return healthFromStage(sessionHealthStage);
 }
 
 /**
@@ -342,7 +556,11 @@ async function currentSessionCharacterHealth(endedAt = Date.now()) {
  * @returns {Promise<boolean>} whether the cloud write succeeded
  */
 async function pushLiveCharacterHealth(health, options = {}) {
-  const value = Math.max(0, Math.min(100, Math.floor(Number(health) || 0)));
+  const parsed = Number(health);
+  const value = Math.max(
+    0,
+    Math.min(100, Math.floor(Number.isFinite(parsed) ? parsed : 0))
+  );
   const liveSessionActive = Boolean(options.liveSessionActive);
   const force = Boolean(options.force);
   const now = Date.now();
@@ -364,6 +582,9 @@ async function pushLiveCharacterHealth(health, options = {}) {
     // Local cache is best-effort.
   }
 
+  // Push to open website tabs immediately (Firebase can lag or require sign-in).
+  await broadcastCharacterHealthToTabs(value, liveSessionActive);
+
   try {
     await AUTH_READY;
     if (!globalThis.FocusBuddyAuth?.syncLiveCharacterHealth) return false;
@@ -382,7 +603,53 @@ async function pushLiveCharacterHealth(health, options = {}) {
 }
 
 /**
- * Every new focus session starts at full health (100/100) and refreshes the website.
+ * Tell content scripts on open tabs to refresh the website health UI.
+ * @param {number} health
+ * @param {boolean} liveSessionActive
+ */
+async function broadcastCharacterHealthToTabs(health, liveSessionActive) {
+  const visual = await resolveBuddyVisual();
+  // Prefer the just-written health over possibly-stale storage read.
+  const characterHealth =
+    typeof health === "number" && Number.isFinite(health)
+      ? health
+      : visual.characterHealth;
+  const buddyFile =
+    visual.characterId === "cat"
+      ? catFileForHealth(
+          liveSessionActive && characterHealth <= 0
+            ? SESSION_START_HEALTH
+            : characterHealth
+        )
+      : visual.buddyFile;
+
+  try {
+    const tabs = await chrome.tabs.query({});
+    await Promise.all(
+      tabs.map((tab) => {
+        if (tab.id == null) return Promise.resolve();
+        return chrome.tabs
+          .sendMessage(tab.id, {
+            type: "BUDDY_VISUAL",
+            characterId: visual.characterId,
+            buddyFile,
+            characterHealth:
+              liveSessionActive && characterHealth <= 0
+                ? SESSION_START_HEALTH
+                : characterHealth,
+            mood: visual.mood,
+            liveSessionActive: Boolean(liveSessionActive),
+          })
+          .catch(() => {});
+      })
+    );
+  } catch {
+    // No tabs / no permission.
+  }
+}
+
+/**
+ * Every new focus session starts at 95 health (cat.png) and refreshes the website.
  * Retries cloud sync briefly if auth is still warming up.
  */
 async function resetCharacterHealthForNewSession() {
@@ -394,14 +661,17 @@ async function resetCharacterHealthForNewSession() {
   stopLiveHealthTicker();
   lastLiveHealthSynced = null;
   lastLiveHealthSyncAt = 0;
+  lockInStartedAt = Date.now();
+  sessionHealthStage = stageFromHealth(SESSION_START_HEALTH);
+  resetHealthProgressState();
 
   await chrome.storage.local.set({
-    [CHARACTER_HEALTH_KEY]: 100,
+    [CHARACTER_HEALTH_KEY]: SESSION_START_HEALTH,
     liveSessionActive: true,
   });
 
   const trySync = async (attempt) => {
-    const ok = await pushLiveCharacterHealth(100, {
+    const ok = await pushLiveCharacterHealth(SESSION_START_HEALTH, {
       liveSessionActive: true,
       force: true,
     });
@@ -413,17 +683,6 @@ async function resetCharacterHealthForNewSession() {
   };
 
   await trySync(1);
-}
-
-function scheduleLiveHealthSync() {
-  if (!lockInActive) return;
-  if (liveHealthSyncTimer !== null) return;
-  liveHealthSyncTimer = setTimeout(async () => {
-    liveHealthSyncTimer = null;
-    if (!lockInActive) return;
-    const health = await currentSessionCharacterHealth();
-    await pushLiveCharacterHealth(health, { liveSessionActive: true });
-  }, LIVE_HEALTH_SYNC_MIN_MS);
 }
 
 /**
@@ -614,24 +873,7 @@ async function appendFocusLog(status, tab) {
 
 async function setCharacterMood(status) {
   await chrome.storage.local.set({ [MOOD_KEY]: status });
-  await broadcastOverlayMood(status);
-}
-
-async function broadcastOverlayMood(mood) {
-  const tabs = await chrome.tabs.query({});
-  await Promise.all(
-    tabs.map(async (tab) => {
-      if (tab.id == null) return;
-      try {
-        await chrome.tabs.sendMessage(tab.id, {
-          type: "OVERLAY_MOOD",
-          mood,
-        });
-      } catch {
-        // Tab has no overlay listener.
-      }
-    })
-  );
+  await broadcastBuddyVisual();
 }
 
 function clearDistractedTimer() {
@@ -644,7 +886,7 @@ function clearDistractedTimer() {
 async function applyTabStatus(status, tab) {
   await appendFocusLog(status, tab);
   if (lockInActive) {
-    scheduleLiveHealthSync();
+    noteFocusStatusForHealth(status, tab?.id);
   }
 
   if (status === "on-task") {
@@ -804,8 +1046,7 @@ async function evaluateActiveTab() {
 async function injectOverlay(tabId, animate) {
   if (tabId == null) return;
   try {
-    const moodResult = await chrome.storage.local.get(MOOD_KEY);
-    const mood = moodResult[MOOD_KEY] || "on-task";
+    const visual = await resolveBuddyVisual();
     // Clear any older overlay copy (including ones that crashed on chrome.storage)
     // so the latest storage-free overlay.js always installs.
     await chrome.scripting.executeScript({
@@ -826,7 +1067,11 @@ async function injectOverlay(tabId, animate) {
     });
     await chrome.tabs.sendMessage(tabId, {
       type: animate ? "OVERLAY_FALL" : "OVERLAY_SHOW",
-      mood,
+      mood: visual.mood,
+      buddyFile: visual.buddyFile,
+      characterId: visual.characterId,
+      characterHealth: visual.characterHealth,
+      liveSessionActive: visual.liveSessionActive,
     });
   } catch {
     // Cannot inject into chrome://, the Web Store, or discarded tabs.
@@ -865,7 +1110,7 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
   await setCharacterMood("on-task");
   clearDistractedTimer();
 
-  // Reset to 100/100 before classifying tabs so the website refreshes immediately.
+  // Reset to 95 health (cat.png) before classifying tabs so the website refreshes immediately.
   await resetCharacterHealthForNewSession();
 
   let timer = await readTimer();
@@ -877,8 +1122,10 @@ async function startLockIn({ taskText, useTimer, durationSeconds }) {
 
   await evaluateActiveTab();
   await showOverlayOnAllTabs(true);
-  // Re-assert full health after timer start (covers any race with tab classification).
-  await pushLiveCharacterHealth(100, { liveSessionActive: true, force: true });
+  await pushLiveCharacterHealth(SESSION_START_HEALTH, {
+    liveSessionActive: true,
+    force: true,
+  });
   startLiveHealthTicker();
   return { lockInActive: true, timer };
 }
@@ -891,11 +1138,12 @@ async function stopLockIn() {
     clearTimeout(healthResetRetryTimer);
     healthResetRetryTimer = null;
   }
+  healthProgress = null;
   await chrome.storage.local.set({ [LOCK_IN_KEY]: false });
   await setCharacterMood("on-task");
   await hideOverlayOnAllTabs();
   const timer = await cancelTimer();
-  await pushLiveCharacterHealth(lastLiveHealthSynced ?? 100, {
+  await pushLiveCharacterHealth(healthFromStage(sessionHealthStage), {
     liveSessionActive: false,
     force: true,
   });
@@ -961,6 +1209,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "START_LOCK_IN") {
     startLockIn(message).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "GET_CHARACTER_HEALTH") {
+    chrome.storage.local
+      .get([CHARACTER_HEALTH_KEY, "liveSessionActive"])
+      .then((result) => {
+        const raw = Number(result[CHARACTER_HEALTH_KEY]);
+        sendResponse({
+          characterHealth: Number.isFinite(raw) ? raw : SESSION_START_HEALTH,
+          liveSessionActive: Boolean(result.liveSessionActive),
+        });
+      });
+    return true;
+  }
+
+  if (message.type === "GET_BUDDY_VISUAL") {
+    resolveBuddyVisual().then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "SET_SELECTED_CHARACTER") {
+    setSelectedCharacter(message.characterId).then((characterId) => {
+      sendResponse({ ok: true, characterId });
+    });
     return true;
   }
 

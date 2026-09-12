@@ -207,13 +207,21 @@ export async function saveSession(session) {
   const uid = currentUid();
   if (!uid) return null;
   await loadSdk();
-  const { doc, setDoc, collection, getDocs, query, orderBy } = firestoreFns;
+  const { doc, setDoc, getDoc, collection, getDocs, query, orderBy } = firestoreFns;
   const ref = doc(db, "users", uid, "sessions", session.id);
   await setDoc(ref, session);
   const snaps = await getDocs(query(collection(db, "users", uid, "sessions"), orderBy("endedAt", "desc")));
   const sessions = snaps.docs.map((item) => item.data());
   const publicStats = summarizeSessionsForPublic(sessions);
-  await setDoc(doc(db, "users", uid, "public", "stats"), publicStats);
+
+  const existingSnap = await getDoc(doc(db, "users", uid, "public", "stats"));
+  const existing = existingSnap.exists() ? existingSnap.data() : null;
+  if (existing?.liveSessionActive) {
+    delete publicStats.characterHealth;
+    delete publicStats.liveSessionActive;
+  }
+
+  await setDoc(doc(db, "users", uid, "public", "stats"), publicStats, { merge: true });
   return session;
 }
 

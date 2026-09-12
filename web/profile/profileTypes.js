@@ -14,6 +14,7 @@
  * @property {boolean} completed
  * @property {string} [task]
  * @property {number} [onTaskRatio] - 0–1
+ * @property {number} [characterHealth] - staged companion health 0–100 at session end
  * @property {number} [longestLockInMs] - longest uninterrupted on-task stretch
  * @property {Record<string, number>} [distractionDomains] - domain → hit count
  * @property {Record<string, number>} [productiveDomains] - on-task domain → hit/time weight

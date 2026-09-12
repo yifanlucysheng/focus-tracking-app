@@ -30,6 +30,20 @@ function applyCharacter(id) {
   } catch {
     // Ignore storage errors in private browsing contexts.
   }
+
+  // Tell the extension (via site-bridge / overlay) so popup + timer art stay in sync.
+  try {
+    window.postMessage(
+      {
+        source: "focus-buddy-website",
+        type: "SET_SELECTED_CHARACTER",
+        characterId: id,
+      },
+      "*"
+    );
+  } catch {
+    // Ignore if messaging is blocked.
+  }
 }
 
 options.forEach((button) => {

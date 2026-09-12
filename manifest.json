@@ -20,9 +20,26 @@
     "48": "logo.PNG",
     "128": "logo.PNG"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["site-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "web_accessible_resources": [
     {
-      "resources": ["sleepbunny.png", "angrybunny.png"],
+      "resources": [
+        "sleepbunny.png",
+        "angrybunny.png",
+        "cat.png",
+        "cat2.png",
+        "cat3.png",
+        "cat4.png",
+        "cat5.png",
+        "cat6.png",
+        "cat7.png"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

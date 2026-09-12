@@ -17,7 +17,7 @@ import {
 } from "../web/profile/focusStreak.js";
 import { publicSessionSummaryFromStats } from "../web/profile/sessionSummary.js";
 import { isProgressAhead } from "../web/profile/xp.js";
-import { getFirebaseAuth, getFirebaseDb } from "./firebaseClient.js";
+import { getFirebaseAuth, getFirebaseDb, onAuthStateChanged } from "./firebaseClient.js";
 import {
   loadChromeProfileStore,
   loadPendingPublicSync,
@@ -34,6 +34,7 @@ import {
  * @property {number} endedAt
  * @property {number} durationMs
  * @property {number} [onTaskRatio]
+ * @property {number} [characterHealth]
  * @property {Record<string, number>} [distractionDomains]
  * @property {Record<string, number>} [productiveDomains]
  */
@@ -80,11 +81,23 @@ export async function syncProfileStats(userId, stats, sessionId, sessionDoc) {
         merge: true,
       });
     }
+
+    // Never clobber an in-progress lock-in health write with a stale completed-session average.
+    const existingSnap = await getDoc(doc(db, "users", userId, "public", "stats"));
+    const existing = existingSnap.exists() ? existingSnap.data() : null;
+    if (existing?.liveSessionActive) {
+      delete payload.characterHealth;
+      delete payload.liveSessionActive;
+    }
+
     await setDoc(doc(db, "users", userId, "public", "stats"), payload, {
       merge: true,
     });
     await clearPendingSyncForUser(userId);
-    return { id: userId, ...payload };
+    return { id: userId, ...payload, ...(existing?.liveSessionActive ? {
+      characterHealth: existing.characterHealth,
+      liveSessionActive: true,
+    } : {}) };
   } catch (err) {
     console.error(
       "[Focus Buddy] Profile sync failed — local progress kept; queued for retry:",
@@ -109,13 +122,20 @@ export async function syncProfileStats(userId, stats, sessionId, sessionDoc) {
  * @param {{ liveSessionActive?: boolean }} [options]
  */
 export async function syncLiveCharacterHealth(health, options = {}) {
-  const auth = getFirebaseAuth();
+  await waitForSignedInUser(5000);
+  let auth;
+  try {
+    auth = getFirebaseAuth();
+  } catch {
+    return null;
+  }
   const userId = auth?.currentUser?.uid;
   if (!userId) return null;
 
+  const parsed = Number(health);
   const characterHealth = Math.max(
     0,
-    Math.min(100, Math.floor(Number(health) || 0))
+    Math.min(100, Math.floor(Number.isFinite(parsed) ? parsed : 0))
   );
   const liveSessionActive = Boolean(options.liveSessionActive);
   const payload = {
@@ -135,6 +155,36 @@ export async function syncLiveCharacterHealth(health, options = {}) {
     console.warn("[Focus Buddy] Live character health sync failed:", err);
     return null;
   }
+}
+
+/**
+ * Wait briefly for Firebase Auth persistence to restore the signed-in user.
+ * @param {number} timeoutMs
+ */
+async function waitForSignedInUser(timeoutMs = 5000) {
+  let auth;
+  try {
+    auth = getFirebaseAuth();
+  } catch {
+    return null;
+  }
+  if (auth.currentUser?.uid) return auth.currentUser;
+
+  return new Promise((resolve) => {
+    /** @type {(() => void)|null} */
+    let unsub = null;
+    const timer = setTimeout(() => {
+      unsub?.();
+      resolve(auth.currentUser);
+    }, timeoutMs);
+    unsub = onAuthStateChanged(auth, (user) => {
+      if (user?.uid) {
+        clearTimeout(timer);
+        unsub?.();
+        resolve(user);
+      }
+    });
+  });
 }
 
 /**
@@ -209,6 +259,12 @@ export async function recordCompletedSession(sessionInput) {
     completed: true,
     onTaskRatio,
   };
+  if (typeof sessionInput.characterHealth === "number") {
+    session.characterHealth = Math.max(
+      0,
+      Math.min(100, Math.floor(sessionInput.characterHealth))
+    );
+  }
   if (sessionInput.distractionDomains) {
     session.distractionDomains = sessionInput.distractionDomains;
   }
@@ -256,21 +312,29 @@ export async function flushPendingPublicSync() {
           { merge: true }
         );
       }
+      const liveSnap = await getDoc(doc(db, "users", item.userId, "public", "stats"));
+      const liveActive = Boolean(liveSnap.exists() && liveSnap.data()?.liveSessionActive);
+      /** @type {Record<string, unknown>} */
+      const publicPayload = {
+        level: item.level ?? item.focus_level,
+        xp: item.xp,
+        xpModel: "progress",
+        streakDays: item.streakDays ?? item.focus_streak,
+        sessionsCompleted: item.sessionsCompleted ?? item.sessions_completed ?? 0,
+        longestSessionMs: item.longestSessionMs ?? item.longest_session_ms ?? 0,
+        topDistraction: item.topDistraction ?? item.top_distraction ?? null,
+        topProductiveSite:
+          item.topProductiveSite ?? item.top_productive_site ?? null,
+        updatedAt: Date.now(),
+      };
+      if (!liveActive) {
+        publicPayload.characterHealth =
+          item.characterHealth ?? item.character_health ?? 0;
+        publicPayload.liveSessionActive = false;
+      }
       await setDoc(
         doc(db, "users", item.userId, "public", "stats"),
-        {
-          level: item.level ?? item.focus_level,
-          xp: item.xp,
-          xpModel: "progress",
-          streakDays: item.streakDays ?? item.focus_streak,
-          sessionsCompleted: item.sessionsCompleted ?? item.sessions_completed ?? 0,
-          longestSessionMs: item.longestSessionMs ?? item.longest_session_ms ?? 0,
-          topDistraction: item.topDistraction ?? item.top_distraction ?? null,
-          topProductiveSite:
-            item.topProductiveSite ?? item.top_productive_site ?? null,
-          characterHealth: item.characterHealth ?? item.character_health ?? 0,
-          updatedAt: Date.now(),
-        },
+        publicPayload,
         { merge: true }
       );
     } catch (err) {

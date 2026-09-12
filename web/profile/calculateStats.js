@@ -124,24 +124,26 @@ export function characterHealthFromOnTaskRatio(onTaskRatio) {
 }
 
 /**
- * Character health from the latest completed session (same formula as live sessions).
- * Empty history returns 100 so a new session can start full; UI may still show "—".
+ * Prefer the staged health saved with the session; fall back to legacy ratio mapping.
  *
  * @param {FocusSession[]} sessions
  * @returns {number} 0–100
  */
 export function calculateCharacterHealth(sessions) {
   const completed = sessions.filter((s) => s.completed);
-  if (completed.length === 0) return 100;
+  if (completed.length === 0) return 95;
 
   const last = completed[completed.length - 1];
+  if (typeof last.characterHealth === "number" && Number.isFinite(last.characterHealth)) {
+    return Math.max(0, Math.min(100, Math.floor(last.characterHealth)));
+  }
   if (typeof last.onTaskRatio === "number") {
     return characterHealthFromOnTaskRatio(last.onTaskRatio);
   }
   if (typeof last.onTaskPercent === "number") {
     return characterHealthFromOnTaskRatio(last.onTaskPercent / 100);
   }
-  return 100;
+  return 95;
 }
 
 /**
