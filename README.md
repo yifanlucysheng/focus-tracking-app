@@ -1,6 +1,20 @@
 # Focus Buddy
 
-Chrome extension + standalone website for focus tracking.
+Chrome extension for focus tracking, with a dashboard, friends, and a lock-in companion.
+
+## Install (anyone)
+
+You do **not** need Vite or `npm run dev`.
+
+1. Clone or download this repo from GitHub.
+2. Open Chrome → `chrome://extensions`
+3. Turn on **Developer mode** (top right)
+4. Click **Load unpacked**
+5. Select the `focus-tracking-app` folder (the one that contains `manifest.json`)
+
+Pin Focus Buddy, click the icon, then **Open dashboard**. Create an account on Settings. Lock-in, folders, stats, and friends all run from that extension.
+
+After you (or a teammate) change `background.js`, run `npm run build:extension` and click **Reload** on the extension card.
 
 ## Website (Supabase auth)
 
@@ -67,33 +81,11 @@ After sign-up / sign-in / page reload, the client loads the current user's `prof
 
 ## Chrome extension auth
 
-The extension uses the **same** Supabase project and FocusBuddy accounts as the website.
+Accounts use **Firebase** (`web/firebase-config.js` / `secrets.public.js`), not a separate Vite server.
 
-**Load the packaged extension from `dist/`** (not the website `dist-web/`):
+`npm run build:extension` writes a loadable package to `dist/` (and `focus-buddy-extension.zip`). Load unpacked from the **repo root** or from `dist/`.
 
-```bash
-npm run build:extension
-# or: npm run build   # website → dist-web/, extension → dist/
-```
-
-Then in `chrome://extensions` → **Load unpacked** → select:
-
-`…/focus-tracking-app/focus-tracking-app/dist`
-
-Credentials are read in the generated `service-worker.js` via:
-
-```js
-importScripts("secrets.local.js"); // sets self.SUPABASE_URL / self.SUPABASE_PUBLISHABLE_KEY
-FocusBuddyAuth.init({ url: globalThis.SUPABASE_URL, publishableKey: globalThis.SUPABASE_PUBLISHABLE_KEY })
-```
-
-1. Edit **`secrets.local.js`** at the **repo root** (gitignored). Packaging copies it into `dist/`.
-2. Paste:
-   - **Supabase API URL** → `self.SUPABASE_URL = "..."` (same as `VITE_SUPABASE_URL` in `.env.local`)
-   - **Supabase publishable key** → `self.SUPABASE_PUBLISHABLE_KEY = "..."` (same as `VITE_SUPABASE_PUBLISHABLE_KEY` — never the secret/service-role key)
-3. After changing `background.js` or `chrome-auth/`, run **`npm run build:extension`** again, then **Reload** the extension in Chrome.
-
-Sign in from the popup. The session is stored in `chrome.storage.local` (not `localStorage`) so the **service worker** can read the authenticated user.
+Optional Gemini key: copy `secrets.local.example.js` → `secrets.local.js` and paste your key.
 
 When a focus timer completes, the extension:
 

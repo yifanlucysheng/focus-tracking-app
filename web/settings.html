@@ -51,11 +51,13 @@
             <input id="new-folder-name" class="field-input" type="text" placeholder="New folder name" />
             <button id="add-folder-btn" class="btn btn-secondary btn-small" type="button">Add folder</button>
           </div>
-          <p class="folders-hint">Save this page (or paste a URL) into folders:</p>
-          <input id="folder-site-url" class="field-input" type="url" placeholder="https://example.com" />
-          <div id="folder-checks" class="folder-checks"></div>
-          <button id="save-folder-site-btn" class="btn btn-secondary btn-small" type="button">Save site to checked folders</button>
-          <p id="folders-status" class="sites-status" aria-live="polite"></p>
+          <div class="folder-save-block">
+            <p class="folders-hint">Save this page (or paste a URL) into folders:</p>
+            <input id="folder-site-url" class="field-input" type="url" placeholder="https://example.com" />
+            <div id="folder-checks" class="folder-checks"></div>
+            <button id="save-folder-site-btn" class="btn btn-secondary btn-small" type="button">Save site to checked folders</button>
+            <p id="folders-status" class="sites-status" aria-live="polite"></p>
+          </div>
         </div>
 
         <div id="signed-in-more" class="settings-grid" hidden>

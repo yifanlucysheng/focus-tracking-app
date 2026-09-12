@@ -1632,15 +1632,25 @@ body:has(.intro-section) .intro-section {
 }
 
 #folders-panel {
-  margin: 40px 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  margin: 36px 0 28px;
+  padding: 4px 0 8px;
 }
 
-.folder-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  width: 100%;
-  margin: 4px 0 8px;
+#folders-panel .field-label {
+  margin: 0;
+}
+
+#folders-panel .folders-hint {
+  margin: 0;
+}
+
+.folder-buttons:empty {
+  display: none;
+  margin: 0;
 }
 
 .folder-chip {
@@ -1707,6 +1717,7 @@ body:has(.intro-section) .intro-section {
   gap: 12px;
   align-items: flex-end;
   width: 100%;
+  margin-top: 2px;
 }
 
 .folder-add-row .field-input {
@@ -1714,10 +1725,33 @@ body:has(.intro-section) .intro-section {
   min-width: 180px;
 }
 
+.folder-save-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(100, 108, 166, 0.18);
+}
+
+.folder-save-block .field-input {
+  font-size: 18px;
+  padding-top: 6px;
+  padding-bottom: 10px;
+}
+
 .folder-checks {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 8px 18px;
+  margin: 2px 0 4px;
+}
+
+#folders-panel .btn-small {
+  margin-top: 2px;
+  align-self: flex-start;
 }
 
 .folder-check {

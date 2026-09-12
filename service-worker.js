@@ -34128,22 +34128,22 @@ function startLiveHealthTicker() {
 }
 
 try {
-  importScripts("secrets.local.js");
+  importScripts("secrets.public.js");
 } catch (err) {
   console.warn(
-    "[Focus Buddy] Could not load secrets.local.js from the extension root:",
+    "[Focus Buddy] Could not load secrets.public.js:",
     err?.message || err
   );
 }
-
-if (!globalThis.FocusBuddyAuth) {
-  try {
-    importScripts("vendor/focusbuddy-auth.iife.js");
-  } catch {
-    // Packaged builds inline this bundle into service-worker.js instead.
-  }
+try {
+  importScripts("secrets.local.js");
+} catch {
+  // Optional Gemini / override keys.
 }
 
+// Auth (FocusBuddyAuth) is inlined into service-worker.js by
+// `npm run build:extension`. Do not importScripts the vendor bundle here —
+// Chrome MV3 often fails to fetch nested vendor scripts from the SW.
 if (!globalThis.FocusBuddyAuth) {
   console.error(
     "[Focus Buddy] Auth bundle missing. Run npm run build:extension and reload the extension."
@@ -34197,7 +34197,7 @@ const AUTH_READY = (async () => {
     return {
       configured: false,
       configMessage:
-        "Connect FocusBuddy: open secrets.local.js and paste the same Firebase web keys as web/firebase-config.js, then reload the extension.",
+        "Connect FocusBuddy: Firebase keys are missing. Reload the unpacked extension from this repo (secrets.public.js must be present).",
       signedIn: false,
       user: null,
       profile: null,

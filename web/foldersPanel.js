@@ -132,8 +132,14 @@ export function initFoldersPanel() {
   if (globalThis.chrome?.tabs?.query) {
     chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
       const tab = tabs[0];
-      if (siteUrlInput && tab?.url && !siteUrlInput.value) {
-        siteUrlInput.value = tab.url;
+      const url = String(tab?.url || "");
+      if (
+        siteUrlInput &&
+        url &&
+        !siteUrlInput.value &&
+        !/^chrome(-extension)?:/i.test(url)
+      ) {
+        siteUrlInput.value = url;
       }
     });
   }
