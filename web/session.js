@@ -138,6 +138,14 @@ function saveSiteLists() {
     // Ignore.
   }
   writeChromeSiteLists(blockSites, allowSites);
+  try {
+    window.postMessage(
+      { source: "focus-buddy-website", type: "SYNC_SITE_LISTS" },
+      "*"
+    );
+  } catch {
+    // Ignore.
+  }
 }
 
 function normalizeSite(value) {

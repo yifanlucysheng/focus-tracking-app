@@ -33362,6 +33362,56 @@ const TIMER_ALARM = "focus-timer-end";
 const DEFAULT_SECONDS = 25 * 60;
 const GEMINI_KEY = "geminiApiKey";
 const GEMINI_MODEL = "gemini-2.5-flash";
+const ALLOW_SITES_KEY = "alwaysAllowSites";
+const BLOCK_SITES_KEY = "alwaysBlockSites";
+/**
+ * Domains treated as on-task during lock-in unless on the block list.
+ * Host match is suffix-based (e.g. docs.google.com matches itself).
+ */
+const WORK_TOOL_HOST_SUFFIXES = [
+  "docs.google.com",
+  "sheets.google.com",
+  "slides.google.com",
+  "classroom.google.com",
+  "drive.google.com",
+  "notion.so",
+  "notion.site",
+  "github.com",
+  "gist.github.com",
+  "instructure.com",
+  "canvaslms.com",
+  "overleaf.com",
+  "office.com",
+  "officeapps.live.com",
+  "sharepoint.com",
+  "onedrive.live.com",
+  "dropbox.com",
+  "figma.com",
+  "miro.com",
+  "quizlet.com",
+  "khanacademy.org",
+  "coursera.org",
+  "edx.org",
+  "brilliant.org",
+  "desmos.com",
+  "wolframalpha.com",
+  "stackoverflow.com",
+  "stackexchange.com",
+  "wikipedia.org",
+  "scholar.google.com",
+  "pubmed.ncbi.nlm.nih.gov",
+];
+/** Rich editors where body text scrape is useless / misleading. */
+const SKIP_EXCERPT_HOST_SUFFIXES = [
+  "docs.google.com",
+  "sheets.google.com",
+  "slides.google.com",
+  "notion.so",
+  "notion.site",
+  "figma.com",
+  "officeapps.live.com",
+  "overleaf.com",
+];
 const DISTRACTED_DELAY_MS = 10_000;
 const LIVE_HEALTH_SYNC_MIN_MS = 1500;
 const CHARACTER_HEALTH_KEY = "characterHealth";
@@ -34359,8 +34409,12 @@ async function applyTabStatus(status, tab) {
 async function scanTabDetails(tab) {
   const url = tab.url || "";
   const title = tab.title || "";
+  const hostname = hostnameFromUrl(url);
   let excerpt = "";
-  if (tab.id != null) {
+  const skipExcerpt = Boolean(
+    hostname && hostMatchesAnySuffix(hostname, SKIP_EXCERPT_HOST_SUFFIXES)
+  );
+  if (!skipExcerpt && tab.id != null) {
     try {
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
@@ -34372,7 +34426,84 @@ async function scanTabDetails(tab) {
     }
   }
   const haystack = `${url} ${title} ${excerpt}`.toLowerCase();
-  return { url, title, excerpt, haystack };
+  return { url, title, excerpt, haystack, hostname };
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+function hostnameFromUrl(url) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * @param {string} value URL or bare host from the allow/block UI
+ * @returns {string}
+ */
+function hostnameFromSiteEntry(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    return new URL(withProtocol).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return raw.toLowerCase().replace(/^www\./, "").split("/")[0];
+  }
+}
+
+/**
+ * @param {string} hostname
+ * @param {string} suffix
+ */
+function hostMatchesSuffix(hostname, suffix) {
+  const host = String(hostname || "").toLowerCase().replace(/^www\./, "");
+  const s = String(suffix || "").toLowerCase().replace(/^www\./, "");
+  if (!host || !s) return false;
+  return host === s || host.endsWith(`.${s}`);
+}
+
+/**
+ * @param {string} hostname
+ * @param {string[]} suffixes
+ */
+function hostMatchesAnySuffix(hostname, suffixes) {
+  return suffixes.some((suffix) => hostMatchesSuffix(hostname, suffix));
+}
+
+/**
+ * @param {string} hostname
+ * @param {string[]} siteEntries
+ */
+function hostMatchesSiteList(hostname, siteEntries) {
+  if (!hostname || !Array.isArray(siteEntries) || siteEntries.length === 0) {
+    return false;
+  }
+  return siteEntries.some((entry) => {
+    const entryHost = hostnameFromSiteEntry(entry);
+    return entryHost && hostMatchesSuffix(hostname, entryHost);
+  });
+}
+
+async function loadSiteLists() {
+  const result = await chrome.storage.local.get([ALLOW_SITES_KEY, BLOCK_SITES_KEY]);
+  return {
+    allow: Array.isArray(result[ALLOW_SITES_KEY]) ? result[ALLOW_SITES_KEY] : [],
+    block: Array.isArray(result[BLOCK_SITES_KEY]) ? result[BLOCK_SITES_KEY] : [],
+  };
+}
+
+/** Seed docs.google.com into Always Allow once if the key was never set. */
+async function ensureDefaultAllowSites() {
+  const result = await chrome.storage.local.get(ALLOW_SITES_KEY);
+  if (Object.prototype.hasOwnProperty.call(result, ALLOW_SITES_KEY)) return;
+  await chrome.storage.local.set({
+    [ALLOW_SITES_KEY]: ["https://docs.google.com"],
+  });
 }
 
 function classifyByKeywords(haystack) {
@@ -34415,15 +34546,20 @@ async function askGeminiIfRelated(task, details) {
   }
 
   const request = (async () => {
+    const excerptNote = details.excerpt
+      ? details.excerpt
+      : "(unavailable — judge from URL and title only; do not assume distraction just because excerpt is missing)";
     const prompt = `Decide if this browser tab is on-task for a student.
 
 Task: ${task}
 
 Tab URL: ${details.url}
 Tab title: ${details.title}
-Page excerpt: ${details.excerpt || "(none)"}
+Page excerpt: ${excerptNote}
 
-Count the tab as related if it would reasonably help with or is about the task, including closely related topics. Examples of related: task "math" and a Wikipedia article on calculus; task "math" and a YouTube video on vector addition.
+Count the tab as related if it would reasonably help with or is about the task, including closely related topics.
+Examples of related: task "math" and a Wikipedia article on calculus; task "math" and a YouTube video on vector addition.
+Google Docs / Sheets / Slides, Notion, Overleaf, Office Online, and similar editors are usually ON-TASK for homework, essays, studying, or writing tasks — even when page text is unavailable.
 Not related: social media, shopping, games, or unrelated entertainment/news unless it clearly teaches the task.
 
 Reply with JSON only: {"related": true} or {"related": false}`;
@@ -34463,11 +34599,33 @@ Reply with JSON only: {"related": true} or {"related": false}`;
   }
 }
 
+/**
+ * Classification order:
+ * 1) always-block → distracted
+ * 2) always-allow → on-task
+ * 3) known work-tool domains → on-task
+ * 4) task keywords in URL/title/excerpt → on-task
+ * 5) Gemini (unknown domains only)
+ * 6) default distracted
+ */
 async function classifyTab(tab) {
   await loadKeywords();
   if (!lockInActive || !tab) return null;
 
   const details = await scanTabDetails(tab);
+  const hostname = details.hostname || hostnameFromUrl(details.url);
+  const lists = await loadSiteLists();
+
+  if (hostMatchesSiteList(hostname, lists.block)) {
+    return "distracted";
+  }
+  if (hostMatchesSiteList(hostname, lists.allow)) {
+    return "on-task";
+  }
+  if (hostMatchesAnySuffix(hostname, WORK_TOOL_HOST_SUFFIXES)) {
+    return "on-task";
+  }
+
   const keywordHit = classifyByKeywords(details.haystack);
   if (keywordHit) return keywordHit;
 
@@ -34608,6 +34766,7 @@ async function stopLockIn() {
 
 loadKeywords();
 readTimer();
+void ensureDefaultAllowSites();
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === HEALTH_ALARM) {

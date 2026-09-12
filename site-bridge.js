@@ -1,16 +1,29 @@
 /**
  * Always-on bridge between the Focus Buddy website and the extension.
- * - Site → extension: selected character
+ * - Site → extension: selected character + allow/block site lists
  * - Extension → site: live character health (does not require the timer overlay)
  */
 (() => {
   if (window.__focusBuddySiteBridge) return;
   window.__focusBuddySiteBridge = true;
 
-  const STORAGE_KEY = "focusBuddy.selectedCharacter";
+  const CHARACTER_KEY = "focusBuddy.selectedCharacter";
+  const BLOCK_SITES_KEY = "focusBuddy.blockSites";
+  const ALLOW_SITES_KEY = "focusBuddy.alwaysAllowSites";
+  const LEGACY_SITES_KEY = "focusBuddy.allowedSites";
 
   function normalizeId(id) {
     return id === "cat" ? "cat" : "sleepbunny";
+  }
+
+  function readJsonList(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
 
   function pushSelectedCharacter(characterId) {
@@ -28,14 +41,29 @@
     }
   }
 
-  function syncFromLocalStorage() {
+  function syncCharacterFromLocalStorage() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(CHARACTER_KEY);
       if (raw === "cat" || raw === "sleepbunny") {
         pushSelectedCharacter(raw);
       }
     } catch {
       // Private browsing / blocked storage.
+    }
+  }
+
+  function syncSiteListsFromLocalStorage() {
+    try {
+      if (typeof chrome === "undefined" || !chrome.storage?.local) return;
+      let block = readJsonList(BLOCK_SITES_KEY);
+      if (block.length === 0) block = readJsonList(LEGACY_SITES_KEY);
+      const allow = readJsonList(ALLOW_SITES_KEY);
+      chrome.storage.local.set({
+        alwaysBlockSites: block,
+        alwaysAllowSites: allow,
+      });
+    } catch {
+      // Extension context invalidated.
     }
   }
 
@@ -78,6 +106,9 @@
     if (data.type === "SET_SELECTED_CHARACTER") {
       pushSelectedCharacter(data.characterId);
     }
+    if (data.type === "SYNC_SITE_LISTS") {
+      syncSiteListsFromLocalStorage();
+    }
   });
 
   try {
@@ -96,10 +127,11 @@
     // Extension context invalidated.
   }
 
-  syncFromLocalStorage();
+  syncCharacterFromLocalStorage();
+  syncSiteListsFromLocalStorage();
   pullBuddyVisual();
 
-  // Only poll on Focus Buddy pages (stats/home) — not every open tab.
+  // Only poll health on Focus Buddy pages (stats/home) — not every open tab.
   const isFocusBuddyPage = Boolean(
     document.getElementById("profile-stats-root") ||
       document.querySelector(".buddy-option, [data-site-nav]")
