@@ -4,6 +4,11 @@
  * - Extension → site: live character health (does not require the timer overlay)
  */
 (() => {
+  try {
+    if (typeof window === "undefined") return;
+  } catch {
+    return;
+  }
   if (window.__focusBuddySiteBridge) return;
   window.__focusBuddySiteBridge = true;
 

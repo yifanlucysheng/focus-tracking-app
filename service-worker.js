@@ -2,6 +2,15 @@
  * Sources: vendor/focusbuddy-auth.iife.js + background.js
  * Rebuild: npm run build:extension
  */
+try {
+  importScripts("secrets.public.js");
+} catch (err) {
+  console.warn(
+    "[Focus Buddy] Could not load secrets.public.js:",
+    err && err.message ? err.message : err
+  );
+}
+
 (() => {
   // node_modules/@firebase/util/dist/postinstall.mjs
   var getDefaultsFromPostinstall = () => void 0;
@@ -34170,19 +34179,8 @@ function startLiveHealthTicker() {
   void scheduleHealthAlarm();
 }
 
-try {
-  importScripts("secrets.public.js");
-} catch (err) {
-  console.warn(
-    "[Focus Buddy] Could not load secrets.public.js:",
-    err?.message || err
-  );
-}
-try {
-  importScripts("secrets.local.js");
-} catch {
-  // Optional Gemini / override keys.
-}
+// secrets.public.js is importScripts()'d at the top of the generated
+// service-worker.js so a missing secrets.local.js cannot crash the worker.
 
 // Auth (FocusBuddyAuth) is inlined into service-worker.js by
 // `npm run build:extension`. Do not importScripts the vendor bundle here —
@@ -35168,9 +35166,11 @@ function parseGeminiRelated(payload) {
 
 async function getGeminiApiKey() {
   const bundled = String(globalThis.GEMINI_API_KEY || "").trim();
-  if (bundled) return bundled;
+  if (bundled && bundled !== "YOUR_GEMINI_API_KEY") return bundled;
   const stored = await chrome.storage.local.get(GEMINI_KEY);
-  return String(stored[GEMINI_KEY] || "").trim();
+  const storedKey = String(stored[GEMINI_KEY] || "").trim();
+  if (storedKey && storedKey !== "YOUR_GEMINI_API_KEY") return storedKey;
+  return "";
 }
 
 async function askGeminiIfRelated(task, details) {
@@ -35598,6 +35598,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "CANCEL_TIMER") {
     cancelTimer().then(sendResponse);
     return true;
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes[GEMINI_KEY]) {
+    geminiCache = new Map();
   }
 });
 

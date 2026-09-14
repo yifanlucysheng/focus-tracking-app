@@ -30,6 +30,8 @@ const shareStats = document.getElementById("share-stats-toggle");
 const shareListening = document.getElementById("share-listening-toggle");
 const spotifyStatus = document.getElementById("spotify-status");
 const spotifyRedirectHint = document.getElementById("spotify-redirect-hint");
+const geminiStatus = document.getElementById("gemini-status");
+const geminiKeyInput = document.getElementById("gemini-key-input");
 
 function setBanner(text) {
   if (banner) banner.textContent = text || "";
@@ -39,6 +41,24 @@ function setSignedIn(on) {
   if (signedOut) signedOut.hidden = Boolean(on);
   if (signedIn) signedIn.hidden = !on;
   if (signedInMore) signedInMore.hidden = !on;
+}
+
+async function refreshGeminiLabel() {
+  if (!geminiStatus) return;
+  try {
+    if (!globalThis.chrome?.storage?.local) {
+      geminiStatus.textContent =
+        "Open Settings from the Focus Buddy popup so the Gemini key can be saved on this device.";
+      return;
+    }
+    const stored = await chrome.storage.local.get("geminiApiKey");
+    const hasKey = Boolean(String(stored.geminiApiKey || "").trim());
+    geminiStatus.textContent = hasKey
+      ? "Gemini key saved on this device. Unknown sites can be classified during lock-in."
+      : "Optional. Lock-in still works from folders, allow/block lists, and task words if this is empty.";
+  } catch {
+    geminiStatus.textContent = "Could not read the Gemini key store.";
+  }
 }
 
 async function refreshSpotifyLabel() {
@@ -68,6 +88,7 @@ async function renderAccount() {
   if (shareStats) shareStats.checked = Boolean(user.shareStats);
   if (shareListening) shareListening.checked = Boolean(user.shareListening);
   await refreshSpotifyLabel();
+  await refreshGeminiLabel();
 
   const requests = await listIncomingRequests().catch(() => []);
   if (requests.length) {
@@ -133,6 +154,39 @@ async function persistPrivacy() {
 shareStats?.addEventListener("change", persistPrivacy);
 shareListening?.addEventListener("change", persistPrivacy);
 
+document.getElementById("save-gemini-btn")?.addEventListener("click", async () => {
+  const key = String(geminiKeyInput?.value || "").trim();
+  if (!key) {
+    setBanner("Paste a Gemini API key first, or click Remove key.");
+    return;
+  }
+  try {
+    if (!globalThis.chrome?.storage?.local) {
+      setBanner("Open this page from the Focus Buddy popup (Open dashboard).");
+      return;
+    }
+    await chrome.storage.local.set({ geminiApiKey: key });
+    if (geminiKeyInput) geminiKeyInput.value = "";
+    await refreshGeminiLabel();
+    setBanner("Gemini key saved on this Chrome profile.");
+  } catch (error) {
+    setBanner(error.message || "Could not save Gemini key.");
+  }
+});
+
+document.getElementById("clear-gemini-btn")?.addEventListener("click", async () => {
+  try {
+    if (globalThis.chrome?.storage?.local) {
+      await chrome.storage.local.remove("geminiApiKey");
+    }
+    if (geminiKeyInput) geminiKeyInput.value = "";
+    await refreshGeminiLabel();
+    setBanner("Gemini key removed. Lock-in still uses lists and task words.");
+  } catch (error) {
+    setBanner(error.message || "Could not remove Gemini key.");
+  }
+});
+
 document.getElementById("spotify-connect-btn")?.addEventListener("click", async () => {
   try {
     if (!isSpotifyConfigured()) {
@@ -163,6 +217,7 @@ const bootNote = await bootCloudSync();
 initFoldersPanel();
 initSiteLists();
 await refreshSpotifyLabel();
+await refreshGeminiLabel();
 if (!isCloudConfigured()) {
   setBanner(bootNote);
 } else {

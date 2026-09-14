@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Focus Buddy",
-  "version": "0.1.2",
-  "description": "A focus tracking companion.",
+  "version": "0.2.0",
+  "description": "Lock in with a bunny or cat companion. Tracks on-task tabs, friends, and focus stats.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArREeOy5h7GWZFZZVuLKKMa3mmEkcDyPBfBJZ7KrNJCVRJq27um4asntL6AuFInZCFqi+wcblpr99U/utU+pTCFX+XscSPAFET+QNLctzix2kCnyBHiNGkpVPGC2Oh4dzbe/yv12AuwIBuvNSNt80Phm51HCAJdy4zO0jpX2rPNuuvoGq94ps+nsSfduOerEL1qNoCplyE4axfF3r4DEAin8io4gU+BP/ABYSw4gDDwZHoGB0ljukuYnV34lNf0yxXGGkz+fthkBj7uuT4gEQB0CInH8ICq7ANU3zdGge4A9aiDIXGEJJWfOZ4SQHHBJ2DxjIQpV4/PT3yvDCkr1BQQIDAQAB",
   "permissions": ["tabs", "storage", "alarms", "scripting", "identity"],
   "host_permissions": [

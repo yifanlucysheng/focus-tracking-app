@@ -1,97 +1,49 @@
 # Focus Buddy
 
-Chrome extension for focus tracking, with a dashboard, friends, and a lock-in companion.
+Chrome extension: lock in with a bunny or cat, track on-task tabs, friends, and stats.
 
-## Install (anyone)
+Anyone can use it in Chrome **without Vite**. It is not on the Chrome Web Store until someone on the team publishes the zip (steps below). Until then, Load unpacked.
 
-You do **not** need Vite or `npm run dev`.
+## Install (Chrome, anyone)
 
-1. Clone or download this repo from GitHub.
-2. Open Chrome → `chrome://extensions`
-3. Turn on **Developer mode** (top right)
-4. Click **Load unpacked**
-5. Select the `focus-tracking-app` folder (the one that contains `manifest.json`)
+1. Download this repo (GitHub → Code → Download ZIP) or clone it.
+2. Optional but recommended: in the project folder run `npm install` then `npm run build:extension`, then load the **`dist`** folder. If you skip that, load the **repo folder that contains `manifest.json`**.
+3. Chrome → `chrome://extensions`
+4. Turn on **Developer mode**
+5. **Load unpacked** → select that folder
+6. Pin Focus Buddy → **Open dashboard** → create an account on Settings
 
-Pin Focus Buddy, click the icon, then **Open dashboard**. Create an account on Settings. Lock-in, folders, stats, and friends all run from that extension.
+Reload the extension after you pull new code. If `background.js` changed, run `npm run build:extension` first.
 
-After you (or a teammate) change `background.js`, run `npm run build:extension` and click **Reload** on the extension card.
+### Features after install
 
-## Website (Supabase auth)
-
-The friends/account UI lives in `web/` and uses Vite so Supabase keys stay in env vars.
-
-### 1. Install
-
-```bash
-npm install
-```
-
-### 2. Environment variables
-
-Copy `.env.example` → `.env.local` and fill in values from
-**Supabase → Project Settings → API**:
-
-```bash
-cp .env.example .env.local
-```
-
-| Variable | Description |
+| Feature | How to use it |
 |---|---|
-| `VITE_SUPABASE_URL` | Project URL (e.g. `https://xxxx.supabase.co`) |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`) — never the secret key |
+| Lock-in / timer / overlay | Popup. Works offline for lists + task words. |
+| Folders, allow/block | Popup or dashboard Settings |
+| Cat / bunny | Dashboard Home |
+| Friends, stats, Activity | Dashboard (sign in) |
+| Spotify | Settings, from the extension dashboard (not `localhost`) |
+| Gemini (optional) | Settings → paste a [Gemini API key](https://aistudio.google.com/apikey) |
 
-Never commit `.env.local`.
+Gemini is optional. Without a key, lock-in still uses allow/block, work sites, folders, and task words.
 
-### 3. Create the `profiles` table
+## Publish to the Chrome Web Store
 
-In the Supabase SQL Editor, run the full script:
+A bot cannot publish for you. You need a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) (one-time Google fee).
 
-[`supabase/profiles.sql`](supabase/profiles.sql)
+1. Run `npm run build:extension`
+2. Upload `focus-buddy-extension.zip`
+3. Screenshots of the popup + dashboard
+4. Privacy policy URL: host `privacy.html` (this repo) or paste the same text
+5. Single purpose: “Helps students stay on task with a companion overlay and session stats.”
+6. Permissions justification: tabs/scripting = overlay + classify the active tab during lock-in; identity = Spotify; storage = session on device; host access = overlay on web pages
 
-That creates `profiles` (`id` = `auth.users.id`, unique `username`, `focus_level`, `xp`, `focus_streak`), RLS policies, and a trigger that inserts a profile row on signup from username metadata.
+Keep the manifest `key` so the extension ID (and Spotify redirect URI) stay
+`https://ckfpkmcmabbkafmnjcjfjjnbflpfjefh.chromiumapp.org/`.
 
-If you already ran an older version of this file, re-run it so the `handle_new_user` trigger is installed.
+## Website (optional Vite)
 
-Also enable **Email** auth under **Authentication → Providers**.
+The in-extension dashboard is the product. `npm run dev` is only for website CSS iteration.
 
-### 3b. Create the `friendships` table
-
-In the Supabase SQL Editor, run:
-
-[`supabase/friendships.sql`](supabase/friendships.sql)
-
-Client helpers live in [`web/friends/friendsService.js`](web/friends/friendsService.js). Add Friend, Friend Requests, and the leaderboard use real accepted friendships from Supabase.
-
-Public profile fields (`username`, `focus_level`, `xp`, `focus_streak`) are **read from Supabase** on website load (authoritative). Local storage is only a cache. Supabase is updated only when a real event changes stats (e.g. `recordCompletedSession`) — never by pushing stale local values on page load. Private session details stay local.
-
-If your project still has a `focus_flame` column, run [`supabase/rename_focus_flame_to_streak.sql`](supabase/rename_focus_flame_to_streak.sql) once in the SQL Editor.
-
-`profiles.xp` is **XP toward the next level** (with `focus_level`), not lifetime XP. If your rows still store legacy lifetime XP, run [`supabase/migrate_xp_to_progress.sql`](supabase/migrate_xp_to_progress.sql) once. Session XP rules live in [`web/profile/xp.js`](web/profile/xp.js) (15 XP/min + 25 on complete; `75 + 20L + 5L²` to level up).
-
-To sync session summary cards (longest session, sessions completed, top distraction / productive site, character health), run [`supabase/add_session_summary_stats.sql`](supabase/add_session_summary_stats.sql) once.
-### 4. Run the website
-
-```bash
-npm run dev
-```
-
-Open the URL Vite prints (usually `http://127.0.0.1:5173`).
-
-After sign-up / sign-in / page reload, the client loads the current user's `profiles` row from Supabase (authoritative for public stats) and keeps it in memory via `getCachedProfile()`.
-
-## Chrome extension auth
-
-Accounts use **Firebase** (`web/firebase-config.js` / `secrets.public.js`), not a separate Vite server.
-
-`npm run build:extension` writes a loadable package to `dist/` (and `focus-buddy-extension.zip`). Load unpacked from the **repo root** or from `dist/`.
-
-Optional Gemini key: copy `secrets.local.example.js` → `secrets.local.js` and paste your key.
-
-When a focus timer completes, the extension:
-
-1. Saves a completed session locally (`chrome.storage`)
-2. Recalculates XP / Focus Level / Focus Streak with the same helpers as the website
-3. Syncs only `xp`, `focus_level`, `focus_streak` to Supabase
-4. If sync fails, keeps local progress and queues a retry (flushed on next auth init / completion)
-
-Task text, site visits, and distraction logs stay local and are not uploaded.
+Accounts use **Firebase** (`web/firebase-config.js` / `secrets.public.js`).

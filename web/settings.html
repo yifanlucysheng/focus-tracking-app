@@ -60,6 +60,20 @@
           </div>
         </div>
 
+        <div class="dash-panel">
+          <p class="field-label">Tab classifier (Gemini)</p>
+          <p id="gemini-status" class="folders-hint">Optional. Lock-in still works from folders, allow/block lists, and task words if this is empty.</p>
+          <input
+            id="gemini-key-input"
+            class="field-input"
+            type="password"
+            autocomplete="off"
+            placeholder="Paste Gemini API key"
+          />
+          <button id="save-gemini-btn" class="btn btn-secondary btn-small" type="button">Save Gemini key</button>
+          <button id="clear-gemini-btn" class="btn btn-secondary btn-small" type="button">Remove key</button>
+        </div>
+
         <div id="signed-in-more" class="settings-grid" hidden>
           <div class="dash-panel">
             <p class="field-label">Privacy</p>

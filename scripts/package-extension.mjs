@@ -115,6 +115,7 @@ if (fs.existsSync(path.join(root, "couchareasprites"))) {
   );
 }
 copyFile("secrets.public.js");
+copyFile("privacy.html");
 if (fs.existsSync(path.join(root, "assets"))) {
   fs.cpSync(path.join(root, "assets"), path.join(outDir, "assets"), {
     recursive: true,
@@ -137,11 +138,8 @@ for (const rel of popupWebModules) {
   REQUIRED_FILES.push(rel);
 }
 
-// Optional local overrides (Gemini, etc.). Do not copy the placeholder example.
-const secretsSrc = path.join(root, "secrets.local.js");
-if (fs.existsSync(secretsSrc)) {
-  copyFile("secrets.local.js");
-}
+// Never package secrets.local.js — a missing importScripts target crashes the
+// service worker, and a real Gemini key must not ship in the zip.
 
 // 3) Verify every required path exists (what Chrome will fetch)
 const missing = REQUIRED_FILES.filter(
@@ -156,7 +154,7 @@ const sw = fs.readFileSync(path.join(outDir, "service-worker.js"), "utf8");
 const importScripts = [...sw.matchAll(/importScripts\(([^)]+)\)/g)].map((m) =>
   m[1].trim()
 );
-const allowedSecrets = /secrets\.(public|local)\.js/;
+const allowedSecrets = /secrets\.public\.js/;
 const badImports = importScripts.filter((args) => !allowedSecrets.test(args));
 if (badImports.length) {
   throw new Error(

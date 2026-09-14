@@ -4,11 +4,20 @@
   } catch {
     return;
   }
+  try {
+    if (typeof document === "undefined" || !document.documentElement) return;
+  } catch {
+    return;
+  }
 
   // Bump so re-inject replaces older overlay copies (mood bunny PNGs, etc.).
-  const OVERLAY_VERSION = 24;
+  const OVERLAY_VERSION = 25;
   if (window.__focusBuddyOverlayVersion === OVERLAY_VERSION) return;
-  document.getElementById("focus-buddy-overlay-host")?.remove();
+  try {
+    document.getElementById("focus-buddy-overlay-host")?.remove();
+  } catch {
+    return;
+  }
   window.__focusBuddyOverlayVersion = OVERLAY_VERSION;
   window.__focusBuddyOverlayInit = true;
 
