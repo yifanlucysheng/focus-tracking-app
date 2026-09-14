@@ -1,19 +1,31 @@
 # Focus Buddy
 
+> **Demo branch:** use [`local/final-preview`](https://github.com/yifanlucysheng/focus-tracking-app/tree/local/final-preview). That is the current build to try and share.
+
 Chrome extension: lock in with a bunny or cat, track on-task tabs, friends, and stats.
 
 Anyone can use it in Chrome **without Vite**. It is not on the Chrome Web Store until someone on the team publishes the zip (steps below). Until then, Load unpacked.
 
-## Install (Chrome, anyone)
+## Install from GitHub
 
-1. Download this repo (GitHub → Code → Download ZIP) or clone it.
-2. Optional but recommended: in the project folder run `npm install` then `npm run build:extension`, then load the **`dist`** folder. If you skip that, load the **repo folder that contains `manifest.json`**.
-3. Chrome → `chrome://extensions`
-4. Turn on **Developer mode**
-5. **Load unpacked** → select that folder
-6. Pin Focus Buddy → **Open dashboard** → create an account on Settings
+```bash
+git clone https://github.com/yifanlucysheng/focus-tracking-app.git
+cd focus-tracking-app
+git checkout local/final-preview
+npm install
+npm run build:extension
+```
 
-Reload the extension after you pull new code. If `background.js` changed, run `npm run build:extension` first.
+Then in Chrome:
+
+1. Open `chrome://extensions`
+2. Turn on **Developer mode**
+3. Click **Load unpacked**
+4. Select the `dist/` folder
+
+Pin Focus Buddy, open the popup, then **Open dashboard**. Create an account on Settings.
+
+After code changes, run `npm run build:extension` again and click **Reload** on the extension card.
 
 ### Features after install
 
@@ -26,7 +38,13 @@ Reload the extension after you pull new code. If `background.js` changed, run `n
 | Spotify | Settings, from the extension dashboard (not `localhost`) |
 | Gemini (optional) | Settings → paste a [Gemini API key](https://aistudio.google.com/apikey) |
 
-Gemini is optional. Without a key, lock-in still uses allow/block, work sites, folders, and task words.
+Gemini is optional. Without a key, lock-in still uses allow/block, work sites, folders, and task words. Do not commit `secrets.local.js`.
+
+### Accounts and cloud sync
+
+Accounts use **Firebase** (`web/firebase-config.js` / `secrets.public.js`). Client keys are already in the repo.
+
+For friends, stats sync, and messaging to work for new users, publish [`firestore.rules`](firestore.rules) in Firebase Console → Firestore → Rules, and keep Email auth enabled.
 
 ## Publish to the Chrome Web Store
 
